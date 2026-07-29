@@ -1,0 +1,42 @@
+# === DADOS SENSÍVEIS — NUNCA VERSIONAR ===
+# Planilhas originais e qualquer export com dados reais de cliente.
+*.xlsx
+*.xls
+*.csv
+dados/privado/
+dados/*.json
+!dados/exemplo/
+!dados/exemplo/*.json
+!dados/schema/
+!dados/schema/*.json
+
+# Credenciais e configuração local
+.env
+.env.*
+# O modelo só tem placeholders — precisa ser versionado, senão ninguém
+# descobre quais variáveis existem.
+!modelos/.env.exemplo
+config.local.js
+credenciais*.json
+*-service-account*.json
+appsscript-url.txt
+
+# Cache de geocodificação — o geocode.json guarda coordenadas de clientes reais.
+# Ignora a pasta inteira: qualquer cache é dado derivado, recriável, e não vale
+# o risco de uma regra estreita deixar um arquivo novo escapar.
+cache/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Build / dependências (o projeto é vanilla, mas ferramentas Python usam venv)
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -1,0 +1,67 @@
+# Sincroniza a tabela de preços (Google Sheets → Supabase).
+#
+# INSTALAR: copie para .github/workflows/sync-precos.yml
+#
+# SEGREDOS necessários (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                https://<projeto>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   chave secret do Supabase
+#   SHEETS_CSV_URL              CSV publicado da aba 'Precos'
+#
+# 🔴 A service_role key ignora RLS por completo. Ela vive AQUI e só aqui —
+#    nunca no frontend, nunca commitada. Segredos do Actions não são
+#    expostos em logs nem para pull requests de forks.
+#
+# Efeito colateral útil: a execução diária conta como atividade e impede
+# o projeto Supabase gratuito de ser pausado por inatividade (1 semana).
+
+name: Sincronizar preços
+
+on:
+  schedule:
+    - cron: '0 11 * * *'      # 08:00 no horário de Brasília (UTC-3), todo dia
+  workflow_dispatch:           # permite rodar na mão pelo painel do GitHub
+    inputs:
+      forcar:
+        description: 'Ignorar as travas de sanidade'
+        type: boolean
+        default: false
+
+# Duas execuções simultâneas gravando no catálogo seria péssimo.
+concurrency:
+  group: sync-precos
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências
+        run: pip install --quiet requests
+
+      - name: Sincronizar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SHEETS_CSV_URL: ${{ secrets.SHEETS_CSV_URL }}
+        run: |
+          python ferramentas/sincronizar_supabase.py \
+            ${{ inputs.forcar && '--forcar' || '' }}
+
+      # Se as travas de sanidade bloquearem, o passo acima falha e o GitHub
+      # manda e-mail. O catálogo anterior continua no ar — que é o certo:
+      # melhor preço velho do que preço errado.
+      - name: Explicar a falha
+        if: failure()
+        run: |
+          echo "::error::Sincronização bloqueada ou com erro."
+          echo "O catálogo ANTERIOR continua no ar — nada foi corrompido."
+          echo "Confira a planilha. Se os números estiverem certos mesmo,"
+          echo "rode este workflow na mão marcando 'forcar'."

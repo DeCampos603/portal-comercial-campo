@@ -1,0 +1,73 @@
+/* =====================================================================
+   Impressão — o PDF do pedido enviado ao cliente.
+
+   🔒 SEGUNDA barreira de segurança. A primeira é `sanitizarParaCliente()`,
+   que impede o dado de entrar no HTML. Aqui é cinto e suspensório: se algo
+   escapar, ao menos não sai impresso.
+   ===================================================================== */
+
+@media print {
+  /* Some tudo que é interface */
+  .cabecalho, .abas, .abas-mobile, .campo-busca, .barra-acoes,
+  .painel, .btn, .sinc, .faixa, .nao-imprimir { display: none !important; }
+
+  /* 🔒 Dado interno NUNCA no papel */
+  .comissao, .saldo, .categoria, .custo, .margem,
+  .col-estoque, .selo-estoque { display: none !important; }
+
+  @page { size: A4 portrait; margin: 12mm; }
+
+  html, body {
+    background: #fff !important; color: #000 !important;
+    font-size: 10pt; line-height: 1.3;
+  }
+  .conteudo { padding: 0 !important; max-width: none !important; }
+  .cartao { border: none !important; box-shadow: none !important; }
+  .cartao__corpo { padding: 0 !important; }
+
+  /* Cabeçalho da tabela repete em toda página — o pedido tem várias folhas */
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, .bloco-total, .assinaturas { break-inside: avoid; }
+
+  .tabela { font-size: 9pt; }
+  .tabela th {
+    background: #eee !important; color: #000 !important;
+    border-bottom: 1px solid #000; position: static;
+  }
+  .tabela td { border-bottom: 1px solid #ddd; }
+
+  /* Mostra o destino dos links: no papel não dá para clicar */
+  a[href^='http']::after { content: ' (' attr(href) ')'; font-size: 8pt; }
+
+  .impressao-so { display: block !important; }
+}
+
+/* Fora da impressão, o bloco do pedido fica escondido */
+.impressao-so { display: none; }
+
+/* ------------------------------------------------ layout do pedido */
+.pedido__topo {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: var(--e4); padding-bottom: var(--e3); margin-bottom: var(--e3);
+  border-bottom: 2px solid currentColor;
+}
+.pedido__titulo { font-size: 13pt; font-weight: 700; margin: 0; }
+.pedido__dados { width: 100%; font-size: 9pt; margin-bottom: var(--e3); }
+.pedido__dados td { padding: 2px 6px 2px 0; vertical-align: top; }
+.pedido__dados .campo-rotulo { font-weight: 700; white-space: nowrap; width: 1%; }
+
+.bloco-total { margin-top: var(--e3); display: flex; justify-content: flex-end; }
+.bloco-total table { font-size: 10pt; }
+.bloco-total td { padding: 3px 10px; }
+.bloco-total .destaque { font-weight: 700; font-size: 11pt; border-top: 1px solid currentColor; }
+
+.assinaturas {
+  display: flex; gap: var(--e8); margin-top: var(--e8); font-size: 9pt;
+}
+.assinaturas div { flex: 1; border-top: 1px solid currentColor; padding-top: 4px; text-align: center; }
+
+.pendente {
+  background: #fff3cd; color: #7a5b00;
+  padding: 1px 5px; border-radius: 3px; font-weight: 600;
+}

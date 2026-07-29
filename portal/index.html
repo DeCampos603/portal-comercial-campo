@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portal Comercial de Campo</title>
+
+<!-- Mesmo com login, mantém o site fora dos buscadores. -->
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+
+<!-- Só OSM e Supabase saem daqui. Nenhum rastreador, nenhuma CDN. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  img-src 'self' data: blob: https://*.tile.openstreetmap.org;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+  style-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline';
+  frame-ancestors 'none';
+  base-uri 'self';">
+
+<meta name="theme-color" content="#14538a">
+<link rel="manifest" href="./manifest.webmanifest">
+
+<link rel="stylesheet" href="./assets/css/base.css">
+<link rel="stylesheet" href="./assets/css/componentes.css">
+<link rel="stylesheet" href="./assets/css/impressao.css">
+<link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- Enquanto decide entre login e portal -->
+  <div id="carregando" class="login">
+    <div class="login__caixa" style="text-align:center">
+      <div class="login__marca">Portal Comercial</div>
+      <p class="suave pequeno" id="carregando-texto">Carregando…</p>
+
+      <!-- Vigia: se o JavaScript não iniciar, o usuário precisa SABER por quê.
+           Sem isto, a tela fica parada para sempre parecendo um fundo vazio. -->
+      <div id="diagnostico" class="cartao oculto" style="margin-top:20px;text-align:left">
+        <div class="cartao__corpo">
+          <p class="forte" style="color:var(--cor-risco)">O portal não conseguiu iniciar.</p>
+          <p class="pequeno" id="diagnostico-motivo"></p>
+          <div class="linha" style="gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn btn--primario btn--pequeno" onclick="location.reload()">Tentar de novo</button>
+            <button class="btn btn--pequeno" id="btn-limpar-cache">Limpar cache e recarregar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Roda ANTES dos módulos: precisa funcionar mesmo quando eles falham.
+  (function () {
+    var mostrado = false;
+    function diagnosticar(motivo) {
+      if (mostrado) return;
+      mostrado = true;
+      var caixa = document.getElementById('diagnostico');
+      var texto = document.getElementById('carregando-texto');
+      if (!caixa) return;
+      document.getElementById('diagnostico-motivo').innerHTML = motivo;
+      caixa.classList.remove('oculto');
+      if (texto) texto.style.display = 'none';
+    }
+
+    // Causa nº 1: abrir o arquivo direto (file://). O navegador bloqueia
+    // módulos JavaScript por segurança e nada roda — a tela fica só o fundo.
+    if (location.protocol === 'file:') {
+      diagnosticar('Você abriu o arquivo direto do disco (<code>file://</code>). ' +
+        'Por segurança, o navegador bloqueia o JavaScript assim.<br><br>' +
+        'O portal precisa de um servidor. No computador, rode:<br>' +
+        '<code style="display:block;margin:6px 0;padding:6px;background:var(--cor-superficie-2);' +
+        'border-radius:4px;font-size:.8rem">python -m http.server 8123 --directory portal</code>' +
+        'e abra <strong>http://localhost:8123</strong>');
+      return;
+    }
+
+    // Erro ao carregar/executar um módulo
+    window.addEventListener('error', function (e) {
+      if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+        diagnosticar('Não consegui carregar <code>' +
+          String(e.target.src || e.target.href).split('/').slice(-2).join('/') +
+          '</code>. Tente "Limpar cache e recarregar".');
+      } else if (e.message) {
+        diagnosticar('Erro no código: <code>' + e.message + '</code>');
+      }
+    }, true);
+
+    window.addEventListener('unhandledrejection', function (e) {
+      diagnosticar('Falha ao iniciar: <code>' +
+        String((e.reason && e.reason.message) || e.reason) + '</code>');
+    });
+
+    // Vigia de tempo: se nada aconteceu em 10s, algo travou.
+    setTimeout(function () {
+      if (!window.__portalIniciou) {
+        diagnosticar('O portal demorou demais para responder. Pode ser conexão ' +
+          'com o Supabase, ou uma versão antiga guardada no navegador.');
+      }
+    }, 10000);
+
+    document.getElementById('btn-limpar-cache').addEventListener('click', function () {
+      var tarefas = [];
+      if (window.caches) {
+        tarefas.push(caches.keys().then(function (ns) {
+          return Promise.all(ns.map(function (n) { return caches.delete(n); }));
+        }));
+      }
+      if (navigator.serviceWorker) {
+        tarefas.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all(rs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+      Promise.all(tarefas).then(function () { location.reload(true); });
+    });
+  })();
+  </script>
+
+  <!-- ------------------------------------------------------- LOGIN -->
+  <section id="tela-login" class="login oculto">
+    <div class="login__caixa">
+      <div class="login__marca">Portal Comercial de Campo</div>
+
+      <form id="form-login" class="cartao" autocomplete="on">
+        <div class="cartao__corpo grade">
+          <div>
+            <label class="rotulo" for="login-email">E-mail</label>
+            <input class="campo" type="email" id="login-email" name="email"
+                   autocomplete="username" required autofocus
+                   inputmode="email" placeholder="seu@email.com">
+          </div>
+          <div>
+            <label class="rotulo" for="login-senha">Senha</label>
+            <input class="campo" type="password" id="login-senha" name="password"
+                   autocomplete="current-password" required placeholder="••••••••">
+          </div>
+
+          <div id="login-erro" class="faixa faixa--risco oculto" role="alert"></div>
+
+          <button class="btn btn--primario" type="submit" id="login-enviar"
+                  style="width:100%">Entrar</button>
+
+          <p class="minusculo suave" style="margin:0;text-align:center">
+            Acesso restrito aos representantes cadastrados.
+          </p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------- SEM AUTORIZAÇÃO -->
+  <section id="tela-sem-acesso" class="login oculto">
+    <div class="login__caixa">
+      <div class="cartao">
+        <div class="cartao__corpo" style="text-align:center">
+          <div style="font-size:2rem">🔒</div>
+          <h1>Conta sem acesso</h1>
+          <p class="suave pequeno">
+            Você entrou, mas esta conta ainda não está autorizada a ver os dados.
+            Peça ao responsável para cadastrá-la como representante.
+          </p>
+          <button class="btn" id="sem-acesso-sair">Sair</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ PORTAL -->
+  <div id="tela-portal" class="oculto" style="display:contents">
+    <header class="cabecalho nao-imprimir">
+      <span class="marca">Portal Comercial</span>
+      <nav class="abas" id="abas-desktop" aria-label="Seções"></nav>
+      <span class="espaco"></span>
+      <span class="sinc" id="indicador-sinc" title="Estado da sincronização"></span>
+      <button class="btn btn--fantasma btn--pequeno" id="btn-atualizar" title="Recarregar dados">↻</button>
+      <button class="btn btn--fantasma btn--pequeno" id="btn-sair" title="Sair">Sair</button>
+    </header>
+
+    <main class="conteudo" id="conteudo" tabindex="-1"></main>
+
+    <nav class="abas-mobile nao-imprimir" id="abas-mobile" aria-label="Seções"></nav>
+  </div>
+</div>
+
+<!-- Bundle local e autocontido: funciona offline e não vaza IP para CDN. -->
+<script src="./assets/vendor/supabase.js"></script>
+<script src="./assets/vendor/leaflet/leaflet.js"></script>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

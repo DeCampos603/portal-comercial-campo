@@ -1,0 +1,110 @@
+/* =====================================================================
+   Base: variáveis, reset e tipografia.
+
+   Isto é uma FERRAMENTA DE TRABALHO, não um site institucional.
+   Densidade e velocidade valem mais que espaço em branco generoso.
+   ===================================================================== */
+
+:root {
+  --cor-fundo: #f6f7f9;
+  --cor-superficie: #ffffff;
+  --cor-superficie-2: #eef1f5;
+  --cor-borda: #d8dce3;
+  --cor-borda-forte: #b9c0cb;
+  --cor-texto: #16202c;
+  --cor-texto-suave: #5b6875;
+
+  --cor-primaria: #14538a;
+  --cor-primaria-forte: #0e3d67;
+  --cor-primaria-clara: #e7effa;
+
+  /* Semânticas: significado fixo em todo o portal. Nunca decorativas. */
+  --cor-ok: #1a7f4b;        --cor-ok-fundo: #e6f4ec;
+  --cor-atencao: #a86a05;   --cor-atencao-fundo: #fdf3e0;
+  --cor-risco: #b3261e;     --cor-risco-fundo: #fce9e8;
+  --cor-info: #14538a;      --cor-info-fundo: #e7effa;
+  --cor-neutro: #5b6875;    --cor-neutro-fundo: #eef1f5;
+
+  --fonte: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --fonte-numero: 'Segoe UI', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e6: 24px; --e8: 32px;
+  --raio: 6px;
+  --sombra: 0 1px 3px rgb(0 0 0 / .08);
+  --sombra-alta: 0 6px 20px rgb(0 0 0 / .14);
+
+  --altura-cabecalho: 52px;
+  --altura-rodape: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cor-fundo: #12171d;
+    --cor-superficie: #1b222b;
+    --cor-superficie-2: #232c37;
+    --cor-borda: #313c49;
+    --cor-borda-forte: #45525f;
+    --cor-texto: #e8edf3;
+    --cor-texto-suave: #9aa7b4;
+    --cor-primaria: #5b9bd8;
+    --cor-primaria-forte: #7fb3e3;
+    --cor-primaria-clara: #1d2c3d;
+    --cor-ok: #5ec98d;        --cor-ok-fundo: #13291d;
+    --cor-atencao: #e0aa4e;   --cor-atencao-fundo: #2e2413;
+    --cor-risco: #f08078;     --cor-risco-fundo: #2e1817;
+    --cor-info: #5b9bd8;      --cor-info-fundo: #1d2c3d;
+    --cor-neutro: #9aa7b4;    --cor-neutro-fundo: #232c37;
+    --sombra: 0 1px 3px rgb(0 0 0 / .5);
+    --sombra-alta: 0 6px 20px rgb(0 0 0 / .6);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--fonte);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3 { margin: 0 0 var(--e2); line-height: 1.25; font-weight: 650; }
+h1 { font-size: 1.15rem; }
+h2 { font-size: 1rem; }
+h3 { font-size: .9rem; }
+p { margin: 0 0 var(--e3); }
+
+/* Dinheiro e quantidade: tabular e à direita, sempre. Coluna de valores com
+   dígitos de larguras diferentes é ilegível e parece amadorismo. */
+.numero, td.valor, .total-valor, .qtd input {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--fonte-numero);
+}
+td.valor, .total-valor { text-align: right; }
+
+/* Foco sempre visível — nunca remover sem substituto. */
+:focus-visible {
+  outline: 2px solid var(--cor-primaria);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection { background: var(--cor-primaria); color: #fff; }
+
+.oculto { display: none !important; }
+.so-leitor {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
