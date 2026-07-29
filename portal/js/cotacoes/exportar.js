@@ -14,6 +14,7 @@
 import { formatarBRL, formatarPercentual, formatarData } from '../nucleo/moeda.js';
 import { esc } from '../nucleo/ui.js';
 import { formatarCNPJ } from '../carteira/formulario.js';
+import { LOGO_SIBB, LOGO_MAJOAQUIM } from './logos.js';
 
 /** Valor preenchido, ou uma linha para completar à caneta. */
 const ou = (valor, largura = '120px') => (String(valor ?? '').trim()
@@ -44,6 +45,8 @@ export function gerarPedidoHTML(cotacao) {
   <div class="pedido">
     <div class="pedido__topo">
       <div>
+        ${LOGO_MAJOAQUIM ? `<img src="${LOGO_MAJOAQUIM}" alt=""
+             style="height:34px;margin-bottom:6px;display:block">` : ''}
         <h1 class="pedido__titulo">PEDIDO DE COMPRA DE PRODUTOS</h1>
         <div style="font-size:9pt">${esc(emp.razaoSocial || 'M A JOAQUIM REPRESENTAÇÃO')}</div>
         <div style="font-size:8pt">CNPJ ${ou(emp.cnpj, '140px')}
@@ -53,6 +56,8 @@ export function gerarPedidoHTML(cotacao) {
         </div>` : ''}
       </div>
       <div style="text-align:right;font-size:9pt">
+        ${LOGO_SIBB ? `<img src="${LOGO_SIBB}" alt=""
+             style="height:30px;margin-bottom:6px;display:inline-block">` : ''}
         <div><strong>Pedido nº</strong> ${ou(ped.numero, '90px')}</div>
         <div><strong>Data:</strong> ${formatarData(cotacao.data)}</div>
         <div><strong>Vendedor:</strong> ${esc(cotacao.vendedor || '')}</div>
@@ -125,7 +130,7 @@ export function gerarPedidoHTML(cotacao) {
     <div style="margin-top:16px;font-size:9pt;line-height:1.9">
       <div><strong>Condições de pagamento:</strong> ${ou(ped.condicoesPagamento, '220px')}</div>
       <div><strong>Prazo de entrega:</strong> ${ou(ped.prazoEntrega, '180px')}</div>
-      <div><strong>Validade da cotação:</strong> ${ou(ped.validade, '140px')}</div>
+      <div><strong>Validade da cotação:</strong> ${ou(cotacao.validade, '200px')}</div>
       ${ped.frete?.trim() ? `<div><strong>Frete:</strong> ${esc(ped.frete)}</div>` : ''}
     </div>
 

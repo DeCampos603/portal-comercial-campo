@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v3';
+const VERSAO = 'portal-v6';
 
 const CASCA = [
   './',
@@ -32,6 +32,10 @@ const CASCA = [
   './js/cotacoes/tela.js',
   './js/cotacoes/exportar.js',
   './js/cotacoes/dadosPedido.js',
+  './js/cotacoes/logos.js',
+  './js/cotacoes/historicoItem.js',
+  './js/nucleo/diasUteis.js',
+  './js/carteira/consultaCNPJ.js',
   './js/carteira/tela.js',
   './js/carteira/formulario.js',
   './js/mapa/tela.js',
@@ -42,7 +46,12 @@ self.addEventListener('install', (evento) => {
   evento.waitUntil(
     caches.open(VERSAO)
       // addAll aborta tudo se UM arquivo falhar. Individual é mais tolerante.
-      .then((cache) => Promise.allSettled(CASCA.map((u) => cache.add(u))))
+      //
+      // ⚠️ `cache: 'reload'` não é detalhe: sem ele, o cache.add busca pelo
+      //    cache HTTP do navegador e guarda a versão ANTIGA do arquivo. Um
+      //    deploy novo ficaria preso na versão velha até o cache expirar.
+      .then((cache) => Promise.allSettled(
+        CASCA.map((u) => cache.add(new Request(u, { cache: 'reload' })))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -85,8 +94,19 @@ self.addEventListener('fetch', (evento) => {
   }
 
   // Código: rede primeiro (pega deploy novo), cache como rede de segurança.
+  //
+  // 🔴 `cache: 'no-cache'` é obrigatório aqui. Sem ele, este fetch consulta o
+  //    cache HTTP do navegador — e como o servidor estático não manda
+  //    Cache-Control, o navegador aplica cache heurístico e devolve a versão
+  //    ANTIGA. O "rede primeiro" viraria "cache primeiro" sem ninguém notar,
+  //    e todo deploy ficaria invisível até o cache expirar sozinho.
+  //    'no-cache' revalida com o servidor (aceita 304), então continua barato.
+  const requisicao = url.origin === self.location.origin
+    ? new Request(request, { cache: 'no-cache' })
+    : request;
+
   evento.respondWith(
-    fetch(request)
+    fetch(requisicao)
       .then((resposta) => {
         if (resposta.ok && url.origin === self.location.origin) {
           const copia = resposta.clone();

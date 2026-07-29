@@ -7,7 +7,18 @@
    ===================================================================== */
 
 @media print {
-  /* Some tudo que é interface */
+  /* Só a folha do pedido vai ao papel.
+     Esconder o portal INTEIRO é mais seguro do que listar classe por classe:
+     assim, o que for acrescentado à interface amanhã já nasce fora da
+     impressão, sem ninguém precisar lembrar de atualizar esta lista.
+     Antes disto, a tabela da tela de cotação — com a coluna de saldo — saía
+     impressa numa segunda folha junto com o pedido do cliente.
+     `!important` é obrigatório: `#tela-portal` tem `display:contents` inline. */
+  #tela-portal, #carregando, #tela-login, #tela-sem-acesso {
+    display: none !important;
+  }
+
+  /* Some tudo que é interface (mantido: vale para o que estiver fora do portal) */
   .cabecalho, .abas, .abas-mobile, .campo-busca, .barra-acoes,
   .painel, .btn, .sinc, .faixa, .nao-imprimir { display: none !important; }
 

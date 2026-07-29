@@ -11,12 +11,14 @@
 
 import { estado, aoMudar, salvarCotacao } from '../nucleo/dados.js';
 import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
-import { formatarBRL, formatarNumero, formatarPercentual, hojeISO } from '../nucleo/moeda.js';
+import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
 import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel } from '../nucleo/ui.js';
 import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from '../carteira/formulario.js';
 import { calcularLinha, calcularTotais, rotuloEstoque, sanitizarParaCliente } from './calculo.js';
 import { gerarPedidoHTML } from './exportar.js';
 import { empresa, pedido } from './dadosPedido.js';
+import { historicoDoItem, seloHistorico, itensParaRepor } from './historicoItem.js';
+import { validadeCotacao } from '../nucleo/diasUteis.js';
 import { perfil } from '../supabase.js';
 
 const RASCUNHO = 'cotacao_rascunho';
@@ -59,10 +61,17 @@ function limparCotacao() {
 
 export function montarCotacoes(alvo) {
   const rascunho = lerRascunho();
-  if (rascunho?.itens?.length && itensDaCotacao.size === 0) {
-    itensDaCotacao = new Map(rascunho.itens);
-    clienteId = rascunho.clienteId ?? null;
-    observacoes = rascunho.observacoes ?? '';
+  if (rascunho) {
+    // Restaura o CLIENTE mesmo sem itens. Antes isto ficava dentro do
+    // `if (itens.length)`, então esvaziar a cotação e trocar de aba fazia
+    // o cliente escolhido desaparecer — junto com o painel de reposição,
+    // que é justamente o que ajuda a remontar o pedido.
+    if (clienteId === null && rascunho.clienteId) clienteId = rascunho.clienteId;
+    if (!observacoes && rascunho.observacoes) observacoes = rascunho.observacoes;
+
+    if (rascunho.itens?.length && itensDaCotacao.size === 0) {
+      itensDaCotacao = new Map(rascunho.itens);
+    }
   }
 
   alvo.innerHTML = esqueleto();
@@ -100,11 +109,11 @@ function redesenhar(alvo) {
     ${window.__faixaEstado ?? ''}
     <div class="nao-imprimir">
       ${blocoCliente(cliente)}
+      ${blocoReposicao()}
       ${blocoBusca()}
       ${blocoLinhas(linhas, totais)}
       ${linhas.length ? blocoDadosPedido() : ''}
-    </div>
-    <div class="impressao-so" id="area-impressao"></div>`;
+    </div>`;
 
   ligarEventos(alvo);
 }
@@ -160,6 +169,39 @@ function blocoCliente(cliente) {
         <button class="btn" id="cot-novo-cliente">+ Novo cliente</button>
       </div>
       <div id="cot-cliente-resultados" style="margin-top:8px"></div>
+    </div>
+  </div>`;
+}
+
+/**
+ * Sugestão de reposição: itens que o cliente costuma comprar e já passaram
+ * do próprio ritmo. É a previsão de compra na prática — em vez de esperar o
+ * cliente lembrar, o portal chega com a lista pronta.
+ */
+function blocoReposicao() {
+  if (!clienteId) return '';
+  const sugestoes = itensParaRepor(clienteId, 6)
+    .filter(({ item }) => !itensDaCotacao.has(item.codigo_sigma));
+  if (!sugestoes.length) return '';
+
+  return `<div class="cartao" style="margin-bottom:12px">
+    <div class="cartao__cabecalho">
+      <h2 style="flex:1">🔁 Provável reposição</h2>
+      <span class="pequeno suave">${sugestoes.length} item(ns)</span>
+    </div>
+    <div class="cartao__corpo" style="padding:10px 16px">
+      <p class="minusculo suave" style="margin:0 0 8px">
+        Itens que este cliente costuma comprar e já passaram do intervalo habitual.
+      </p>
+      <div class="linha" style="flex-wrap:wrap;gap:6px">
+        ${sugestoes.map(({ item, historico }) => `
+          <button class="btn btn--pequeno" data-repor="${esc(item.codigo_sigma)}"
+                  title="${esc(item.descricao)}">
+            + ${esc(item.codigo_sigma)}
+            <span class="suave">(${formatarNumero(historico.quantidadeTipica)} un ·
+            ${historico.diasDeAtraso}d além)</span>
+          </button>`).join('')}
+      </div>
     </div>
   </div>`;
 }
@@ -248,6 +290,7 @@ function blocoLinhas(linhas, totais) {
   const corpo = linhas.map(({ item, calculo }) => {
     const est = rotuloEstoque(item.status_estoque);
     const excede = item.saldo != null && calculo.qtd > item.saldo;
+    const hist = historicoDoItem(clienteId, item.codigo_sigma);
     return `<tr data-codigo="${esc(item.codigo_sigma)}">
       <td>
         <div class="forte">${esc(item.codigo_sigma)}</div>
@@ -258,9 +301,18 @@ function blocoLinhas(linhas, totais) {
         <div class="minusculo" style="margin-top:2px">
           <span class="selo selo--${est.classe} selo-estoque">${est.icone} ${esc(est.texto)}${
             item.saldo != null ? ` · ${formatarNumero(item.saldo)} un.` : ''}</span>
-          ${item.st ? '<span class="selo selo--info" title="Sujeito a apuração — consultar Sigma">ST</span>' : ''}
+          ${item.st ? '<span class="selo selo--info" title="Sujeito a apuração — consultar SIBB">ST</span>' : ''}
           ${excede ? `<span class="selo selo--risco">⚠️ pediu ${formatarNumero(calculo.qtd)}, há ${formatarNumero(item.saldo)}</span>` : ''}
+          ${seloHistorico(hist)}
         </div>
+        ${hist ? `<div class="minusculo suave" style="margin-top:3px">
+          Já comprou ${hist.vezes}× · costuma levar <strong>${formatarNumero(hist.quantidadeTipica)}</strong>
+          · última em ${formatarData(hist.ultimaData)} por ${formatarBRL(hist.ultimoValorUnitario)}
+          ${hist.quantidadeTipica !== calculo.qtd
+            ? `<button class="btn btn--pequeno" data-usar-tipica="${esc(item.codigo_sigma)}"
+                       style="margin-left:6px">usar ${formatarNumero(hist.quantidadeTipica)}</button>`
+            : ''}
+        </div>` : ''}
       </td>
       <td class="qtd" style="width:90px">
         <input class="campo" type="number" min="1" step="1" inputmode="numeric"
@@ -338,6 +390,8 @@ function blocoLinhas(linhas, totais) {
 function blocoDadosPedido() {
   const p = pedido.ler();
   const faltando = empresa.pendencias();
+  const numero = pedido.numeroAtual(estado.cotacoes);
+  const validade = validadeCotacao(p.validadeDiasUteis ?? 7);
 
   return `<div class="cartao" style="margin-top:12px">
     <div class="cartao__cabecalho">
@@ -353,12 +407,16 @@ function blocoDadosPedido() {
       <div class="grade grade--2">
         <div>
           <label class="rotulo" for="ped-numero">Pedido nº</label>
-          <input class="campo" id="ped-numero" value="${esc(p.numero)}"
-                 placeholder="Ex.: 001 ou MJ-0042">
+          <input class="campo" id="ped-numero" value="${esc(numero)}"
+                 ${p.numeroAutomatico ? 'readonly' : ''}
+                 placeholder="Ex.: 2026-0001">
           <label class="linha minusculo suave" style="gap:5px;margin-top:5px;cursor:pointer">
             <input type="checkbox" id="ped-auto" ${p.numeroAutomatico ? 'checked' : ''}>
-            Avançar o número sozinho a cada pedido gerado
+            Numerar automaticamente
           </label>
+          ${p.numeroAutomatico ? `<p class="minusculo suave" style="margin:2px 0 0">
+            Calculado do histórico: ${estado.cotacoes.length} cotação(ões) registrada(s).
+          </p>` : ''}
         </div>
         <div>
           <label class="rotulo" for="ped-pagamento">Condições de pagamento</label>
@@ -371,14 +429,25 @@ function blocoDadosPedido() {
                  placeholder="Ex.: 10 dias úteis">
         </div>
         <div>
-          <label class="rotulo" for="ped-validade">Validade da cotação</label>
-          <input class="campo" id="ped-validade" value="${esc(p.validade)}"
-                 placeholder="Ex.: 7 dias">
+          <label class="rotulo">Validade da cotação</label>
+          <div class="campo" style="display:flex;align-items:center;
+               background:var(--cor-superficie-2);cursor:default">
+            ${esc(validade.texto)}
+          </div>
+          <p class="minusculo suave" style="margin:4px 0 0">
+            Fixo em 7 dias úteis — pula fim de semana e feriado nacional.
+          </p>
         </div>
         <div>
-          <label class="rotulo" for="ped-frete">Frete</label>
-          <input class="campo" id="ped-frete" value="${esc(p.frete)}"
-                 placeholder="Ex.: CIF ou FOB">
+          <label class="rotulo">Frete</label>
+          <div class="linha" style="gap:6px">
+            ${['CIF', 'FOB'].map((tipo) => `
+              <button class="btn ${p.frete === tipo ? 'btn--primario' : ''}"
+                      data-frete="${tipo}" style="flex:1">${tipo}</button>`).join('')}
+          </div>
+          <p class="minusculo suave" style="margin:4px 0 0">
+            CIF: frete por conta do remetente · FOB: por conta do destinatário
+          </p>
         </div>
       </div>
 
@@ -439,13 +508,14 @@ function abrirDadosEmpresa() {
 
 function guardarCampoPedido() {
   const valor = (id) => document.getElementById(id)?.value.trim() ?? '';
+  const atual = pedido.ler();
   pedido.gravar({
-    numero: valor('ped-numero'),
+    ...atual,
+    numero: valor('ped-numero') || atual.numero,
     numeroAutomatico: document.getElementById('ped-auto')?.checked ?? true,
     condicoesPagamento: valor('ped-pagamento'),
     prazoEntrega: valor('ped-prazo'),
-    validade: valor('ped-validade'),
-    frete: valor('ped-frete'),
+    // frete e validade não vêm de <input>: um é botão, o outro é calculado.
   });
 }
 
@@ -479,6 +549,7 @@ function desenharResultados() {
                 item.saldo != null ? ` · ${formatarNumero(item.saldo)} un.` : ''}</span>
               ${item.st ? '<span class="selo selo--info">ST</span>' : ''}
               ${jaTem ? '<span class="selo selo--info">já na cotação</span>' : ''}
+              ${seloHistorico(historicoDoItem(clienteId, item.codigo_sigma))}
             </div>
           </td>
           <td class="valor forte" style="width:110px">${formatarBRL(item.valor_unitario_centavos)}</td>
@@ -605,6 +676,27 @@ function ligarEventos(alvo) {
     });
   });
 
+  alvo.querySelectorAll('[data-repor]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const codigo = botao.dataset.repor;
+      const h = historicoDoItem(clienteId, codigo);
+      itensDaCotacao.set(codigo, h?.quantidadeTipica || 1);
+      salvarRascunho();
+      redesenhar(alvo);
+    });
+  });
+
+  alvo.querySelectorAll('[data-usar-tipica]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const codigo = botao.dataset.usarTipica;
+      const h = historicoDoItem(clienteId, codigo);
+      if (!h) return;
+      itensDaCotacao.set(codigo, h.quantidadeTipica);
+      salvarRascunho();
+      redesenhar(alvo);
+    });
+  });
+
   alvo.querySelectorAll('[data-remover]').forEach((botao) => {
     botao.addEventListener('click', () => {
       itensDaCotacao.delete(botao.dataset.remover);
@@ -624,19 +716,61 @@ function ligarEventos(alvo) {
     redesenhar(alvo);
   });
 
-  alvo.querySelector('#cot-imprimir')?.addEventListener('click', () => imprimir(alvo));
+  // `imprimir` é assíncrona: sem o catch, uma falha ao gravar o histórico
+  // viraria "unhandled rejection" e o representante não veria nada acontecer.
+  alvo.querySelector('#cot-imprimir')?.addEventListener('click', () => {
+    imprimir(alvo).catch((erro) => {
+      console.error('Falha ao gerar o pedido:', erro);
+      avisar(`Não consegui gerar o PDF: ${erro.message}`, 'risco');
+    });
+  });
   alvo.querySelector('#cot-empresa')?.addEventListener('click', abrirDadosEmpresa);
 
   // Grava a cada digitação: o representante não deveria ter de "salvar" isto.
-  ['ped-numero', 'ped-pagamento', 'ped-prazo', 'ped-validade', 'ped-frete']
+  ['ped-numero', 'ped-pagamento', 'ped-prazo']
     .forEach((id) => alvo.querySelector(`#${id}`)
       ?.addEventListener('input', guardarCampoPedido));
-  alvo.querySelector('#ped-auto')?.addEventListener('change', guardarCampoPedido);
+
+  alvo.querySelector('#ped-auto')?.addEventListener('change', () => {
+    guardarCampoPedido();
+    redesenhar(alvo);            // alterna entre campo editável e automático
+  });
+
+  alvo.querySelectorAll('[data-frete]').forEach((botao) =>
+    botao.addEventListener('click', () => {
+      pedido.gravar({ ...pedido.ler(), frete: botao.dataset.frete });
+      redesenhar(alvo);
+    }));
 }
 
 // --------------------------------------------------------- impressão
 
-function imprimir(alvo) {
+/**
+ * A folha do pedido, pendurada no `<body>` — nunca dentro da aba.
+ *
+ * 🔴 Ela morava dentro do HTML da tela de cotações. Qualquer redesenho a
+ *    recriava vazia, e redesenho acontece sozinho: `salvarCotacao` avisa os
+ *    ouvintes ao gravar, e `sincronizarFila()` avisa de novo quando a rede
+ *    responde, centenas de milissegundos depois. Medido: 31.941 caracteres no
+ *    instante do `print()`, 0 logo em seguida. No Chrome saía certo por
+ *    acidente — `print()` bloqueia a thread e a folha já tinha ido para o
+ *    spooler —, mas um Ctrl+P do usuário logo depois imprimia página em branco.
+ *
+ *    Reordenar o código não resolvia: só tirava a corrida de lugar. Fora do
+ *    container redesenhado, o problema deixa de existir por construção.
+ */
+function areaImpressao() {
+  let area = document.getElementById('area-impressao');
+  if (!area) {
+    area = document.createElement('div');
+    area.id = 'area-impressao';
+    area.className = 'impressao-so';
+    document.body.appendChild(area);
+  }
+  return area;
+}
+
+async function imprimir(alvo) {
   const linhas = montarLinhas();
   if (!linhas.length) { avisar('A cotação está vazia.', 'atencao'); return; }
 
@@ -649,25 +783,35 @@ function imprimir(alvo) {
   guardarCampoPedido();
 
   const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
+  const dadosPedido = { ...pedido.ler(), numero: pedido.numeroAtual(estado.cotacoes) };
   const cotacao = {
     data: hojeISO(),
     vendedor: perfil()?.nome ?? '',
     observacoes,
+    validade: validadeCotacao(dadosPedido.validadeDiasUteis ?? 7).texto,
     empresa: empresa.ler(),
-    pedido: pedido.ler(),
+    pedido: dadosPedido,
     cliente, linhas, totais,
   };
 
   // 🔒 Sanitiza ANTES de gerar o HTML: o dado interno nunca entra na página.
   const limpa = sanitizarParaCliente(cotacao);
-  document.getElementById('area-impressao').innerHTML = gerarPedidoHTML(limpa);
+  areaImpressao().innerHTML = gerarPedidoHTML(limpa);
+
   window.print();
 
-  // Registra no histórico do cliente. Os itens vão como fotografia do
-  // momento: o preço muda toda semana, o histórico não pode mudar junto.
+  // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
+  pedido.avancarNumero();
+  const campoNumero = document.getElementById('ped-numero');
+  if (campoNumero) campoNumero.value = pedido.ler().numero;
+
+  // Registra no histórico do cliente DEPOIS de imprimir: gerar o PDF é o que o
+  // representante veio fazer, e uma falha ao arquivar não pode impedir isso.
+  // Os itens vão como fotografia do momento — o preço muda toda semana, o
+  // histórico não pode mudar junto.
   if (cliente) {
-    const dados = pedido.ler();
-    salvarCotacao({
+    const dados = dadosPedido;
+    await salvarCotacao({
       id: `cot_${hojeISO().replace(/-/g, '')}_${cliente.codigo}_${Date.now().toString(36)}`,
       equipe_id: perfil()?.equipe_id,
       representante_id: perfil()?.id,
@@ -692,20 +836,11 @@ function imprimir(alvo) {
       condicoes: {
         pagamento: dados.condicoesPagamento || null,
         prazo: dados.prazoEntrega || null,
-        validade: dados.validade || null,
+        validade: cotacao.validade,
         frete: dados.frete || null,
       },
     });
   }
-
-  // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
-  pedido.avancarNumero();
-
-  // ⚠️ NÃO redesenhar aqui. Um redesenho recria a área de impressão vazia, e
-  // se o navegador imprimir de forma assíncrona sai uma folha em branco.
-  // Atualiza apenas o campo do número, no lugar.
-  const campoNumero = document.getElementById('ped-numero');
-  if (campoNumero) campoNumero.value = pedido.ler().numero;
 }
 
 // Atalho global: "/" foca a busca de qualquer lugar da tela de cotações.

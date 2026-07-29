@@ -7,6 +7,7 @@
 
 import { estado, salvarCliente } from '../nucleo/dados.js';
 import { abrirPainel, esc, avisar } from '../nucleo/ui.js';
+import { consultarCNPJ } from './consultaCNPJ.js';
 import { perfil } from '../supabase.js';
 
 /** Guarda só os dígitos — comparação e busca ficam previsíveis. */
@@ -65,8 +66,12 @@ export function abrirFormularioCliente(cliente = null, aoSalvar = null) {
       <div class="grade grade--2">
         <div>
           <label class="rotulo" for="cli-cnpj">CNPJ</label>
-          <input class="campo" id="cli-cnpj" inputmode="numeric"
-                 value="${esc(formatarCNPJ(c.cnpj))}" placeholder="00.000.000/0000-00">
+          <div class="linha" style="gap:6px">
+            <input class="campo" id="cli-cnpj" inputmode="numeric" style="flex:1"
+                   value="${esc(formatarCNPJ(c.cnpj))}" placeholder="00.000.000/0000-00">
+            <button class="btn" id="cli-consultar" type="button"
+                    title="Buscar dados na Receita Federal">🔎</button>
+          </div>
           <p class="minusculo" id="cli-cnpj-aviso" style="margin:4px 0 0"></p>
         </div>
         <div>
@@ -171,6 +176,63 @@ export function abrirFormularioCliente(cliente = null, aoSalvar = null) {
     } else {
       avisoCNPJ.textContent = d ? `${d.length}/14 dígitos` : '';
       avisoCNPJ.style.color = 'var(--cor-texto-suave)';
+    }
+  });
+
+  // ---- Consulta na base pública da Receita (BrasilAPI)
+  document.getElementById('cli-consultar').addEventListener('click', async () => {
+    const botao = document.getElementById('cli-consultar');
+    const aviso = document.getElementById('cli-cnpj-aviso');
+    botao.disabled = true;
+    botao.textContent = '⏳';
+    aviso.textContent = 'Consultando a Receita…';
+    aviso.style.color = 'var(--cor-texto-suave)';
+
+    try {
+      const d = await consultarCNPJ(campoCNPJ.value);
+
+      // Só preenche campo VAZIO — o que o representante digitou vale mais
+      // que o cadastro da Receita, que traz o endereço da inscrição e nem
+      // sempre é onde a mercadoria é entregue.
+      const preencher = (id, valor) => {
+        const campo = document.getElementById(id);
+        if (campo && valor && !campo.value.trim()) {
+          campo.value = valor;
+          campo.style.background = 'var(--cor-ok-fundo)';
+          return 1;
+        }
+        return 0;
+      };
+
+      let n = 0;
+      n += preencher('cli-nome', d.razaoSocial);
+      n += preencher('cli-logradouro', d.logradouro);
+      n += preencher('cli-bairro', d.bairro);
+      n += preencher('cli-cidade', d.cidade);
+      n += preencher('cli-cep', d.cep);
+      n += preencher('cli-telefone', d.telefone);
+      n += preencher('cli-email', d.email);
+      if (d.uf) {
+        const uf = document.getElementById('cli-uf');
+        if (uf) uf.value = d.uf;
+      }
+
+      campoCNPJ.value = formatarCNPJ(d.cnpj);
+      aviso.innerHTML = d.ativa
+        ? `✅ ${esc(d.razaoSocial)} — ${n} campo(s) preenchido(s)`
+        : `⚠️ Situação na Receita: <strong>${esc(d.situacao)}</strong> — `
+          + 'empresa não ativa não emite nota.';
+      aviso.style.color = d.ativa ? 'var(--cor-ok)' : 'var(--cor-risco)';
+
+      if (!n) {
+        aviso.innerHTML += ' <span class="suave">(campos já preenchidos foram mantidos)</span>';
+      }
+    } catch (erro) {
+      aviso.textContent = `⚠️ ${erro.message}`;
+      aviso.style.color = 'var(--cor-atencao)';
+    } finally {
+      botao.disabled = false;
+      botao.textContent = '🔎';
     }
   });
 

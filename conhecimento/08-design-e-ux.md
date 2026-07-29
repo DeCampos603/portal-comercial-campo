@@ -190,6 +190,59 @@ O PDF é gerado com `window.print()` + CSS. Zero dependência, resultado nativo 
 O PDF precisa sair no **formato do pedido Sigma** — cabeçalho, itens, totais,
 condições, campos de aprovação. Ele é um documento comercial, não um print de tela.
 
+### 🔴 A folha do pedido mora no `<body>`, nunca dentro da aba
+
+A área de impressão começou dentro do HTML da tela de cotações. Parecia natural —
+e estava errado. Todo redesenho da aba a recriava **vazia**, e redesenho acontece
+sozinho, sem ninguém clicar em nada:
+
+1. `salvarCotacao()` grava e chama `avisar()` → os ouvintes redesenham.
+2. `sincronizarFila()` roda **sem `await`** e avisa de novo quando a rede responde,
+   centenas de milissegundos depois.
+
+Medido no navegador: **31.941 caracteres** na área no instante do `print()`,
+**0** logo em seguida. No Chrome o documento saía certo **por acidente** —
+`window.print()` bloqueia a thread, então a folha já tinha ido para o spooler antes
+do apagamento. Bastava o usuário dar **Ctrl+P** em seguida para imprimir uma
+página em branco.
+
+Reordenar o código (gravar antes, montar depois) **não resolve**: só muda a corrida
+de lugar, porque a segunda notificação vem da rede, num tempo que ninguém controla.
+
+```js
+// A folha vive fora do container redesenhado. Criada uma vez, sob demanda.
+function areaImpressao() {
+  let area = document.getElementById('area-impressao');
+  if (!area) {
+    area = document.createElement('div');
+    area.id = 'area-impressao';
+    area.className = 'impressao-so';
+    document.body.appendChild(area);
+  }
+  return area;
+}
+```
+
+**Regra geral:** conteúdo que precisa sobreviver a um redesenho não pode ser filho
+do que é redesenhado. Vale para a folha de impressão, para painéis modais e para
+qualquer coisa cujo tempo de vida seja diferente do da tela que a criou.
+
+### Esconda o portal inteiro, não classe por classe
+
+A lista `.cabecalho, .abas, .btn…` esquece do que for criado depois. Enquanto ela
+foi a única defesa, a **tabela da tela de cotação — com a coluna de saldo** — saía
+impressa numa segunda folha junto com o pedido do cliente.
+
+```css
+@media print {
+  /* `!important` é obrigatório: #tela-portal tem `display:contents` inline. */
+  #tela-portal, #carregando, #tela-login, #tela-sem-acesso { display: none !important; }
+}
+```
+
+O que for acrescentado à interface amanhã já nasce fora da impressão, sem depender
+de alguém lembrar de atualizar uma lista.
+
 ## Acessibilidade (mínimo obrigatório)
 
 - Contraste **4.5:1** em texto normal, 3:1 em texto grande. Verifique os tons de status.
