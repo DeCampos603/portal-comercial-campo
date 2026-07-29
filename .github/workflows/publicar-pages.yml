@@ -1,0 +1,66 @@
+# Publica o portal no GitHub Pages.
+#
+# Publica APENAS a pasta `portal/`. O resto do repositório (conhecimento,
+# ferramentas, modelos) não vai para o site — não há motivo para servir
+# documentação e scripts como página web.
+#
+# Por que workflow em vez de "Deploy from a branch": o modo por branch só
+# aceita a raiz `/` ou `/docs`. Publicar `/portal` exigiria renomear a pasta.
+#
+# ATIVAR (uma vez): Settings -> Pages -> Source: "GitHub Actions"
+
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'portal/**'
+      - '.github/workflows/publicar-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Uma publicação por vez; não cancela a que já está no ar.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rede de segurança: se algum dado sensível escapar do .gitignore,
+      # o deploy falha aqui em vez de publicar na internet.
+      - name: Conferir se nada sensível vai ao ar
+        run: |
+          set -e
+          if grep -rlE 'sb_secret_[A-Za-z0-9]' portal/ 2>/dev/null | grep -v vendor; then
+            echo "::error::Chave secreta encontrada em portal/. Publicação abortada."
+            exit 1
+          fi
+          if find portal -name '*.xlsx' -o -name '.env' | grep -q .; then
+            echo "::error::Planilha ou .env dentro de portal/. Publicação abortada."
+            exit 1
+          fi
+          echo "OK: nenhuma chave secreta nem dado privado em portal/"
+
+      - uses: actions/configure-pages@v5
+
+      - name: Empacotar a pasta portal
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: portal
+
+      - name: Publicar
+        id: deploy
+        uses: actions/deploy-pages@v4
