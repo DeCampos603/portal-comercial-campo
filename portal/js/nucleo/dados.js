@@ -15,6 +15,7 @@ export const estado = {
   catalogo: [],
   clientes: [],
   visitas: [],
+  cotacoes: [],
   atualizadoEm: null,       // quando os dados em memória foram obtidos
   daCache: false,           // true = ainda não confirmou com o servidor
   sincronizando: false,
@@ -25,6 +26,20 @@ export const estado = {
 const ouvintes = new Set();
 export function aoMudar(fn) { ouvintes.add(fn); return () => ouvintes.delete(fn); }
 export function avisar() { ouvintes.forEach((fn) => fn(estado)); }
+
+/**
+ * Colunas do cliente. `cnpj` e `inscricao_estadual` vieram na migração 03 —
+ * se ela ainda não foi aplicada, o PostgREST recusa a consulta inteira.
+ * Por isso existe a versão sem elas, usada como plano B.
+ */
+const COLUNAS_CLIENTE_BASE =
+  'id, codigo, nome, origem, status, contato, telefone, whatsapp, email, '
+  + 'logradouro, bairro, cidade, uf, cep, lat, lng, geo_precisao, '
+  + 'grupo_economico, notas, ultima_visita';
+const COLUNAS_CLIENTE = `${COLUNAS_CLIENTE_BASE}, cnpj, inscricao_estadual`;
+
+/** Sinaliza à interface o que o banco ainda não tem. */
+export const recursos = { cnpj: true, cotacoes: true };
 
 /**
  * Busca todas as linhas de uma tabela, paginando.
@@ -46,16 +61,53 @@ async function buscarTudo(tabela, colunas, ordem) {
   }
 }
 
+/**
+ * Clientes, tolerando a migração 03 ainda não aplicada.
+ * Sem isso, um banco desatualizado derrubaria o carregamento inteiro —
+ * o portal ficaria sem catálogo por causa de uma coluna que falta.
+ */
+async function buscarClientes() {
+  try {
+    const dados = await buscarTudo('clientes', COLUNAS_CLIENTE, 'nome');
+    recursos.cnpj = true;
+    return dados;
+  } catch (erro) {
+    if (!/column .* does not exist|cnpj/i.test(erro.message || '')) throw erro;
+    recursos.cnpj = false;
+    console.warn('Coluna cnpj ausente — rode modelos/supabase/03-cnpj-e-cotacoes.sql');
+    return buscarTudo('clientes', COLUNAS_CLIENTE_BASE, 'nome');
+  }
+}
+
+/** Cotações. Tabela nova: se não existir, segue sem histórico. */
+async function buscarCotacoes() {
+  try {
+    const dados = await buscarTudo('cotacoes',
+      'id, cliente_id, representante_id, numero, nome_cliente, data, situacao, '
+      + 'total_produtos_centavos, total_ipi_centavos, total_com_ipi_centavos, '
+      + 'quantidade_itens, itens, observacoes, condicoes, atualizado_em', 'data');
+    recursos.cotacoes = true;
+    return dados;
+  } catch (erro) {
+    if (!/does not exist|relation|schema cache/i.test(erro.message || '')) throw erro;
+    recursos.cotacoes = false;
+    console.warn('Tabela cotacoes ausente — rode modelos/supabase/03-cnpj-e-cotacoes.sql');
+    return [];
+  }
+}
+
 /** Carrega tudo. Se `aoVivo` falhar, cai para o cache sem perder a tela. */
 export async function carregar() {
   // 1. cache primeiro — tela útil na hora
-  const [catCache, cliCache, visCache] = await Promise.all([
-    recuperar('catalogo'), recuperar('clientes'), recuperar('visitas'),
+  const [catCache, cliCache, visCache, cotCache] = await Promise.all([
+    recuperar('catalogo'), recuperar('clientes'),
+    recuperar('visitas'), recuperar('cotacoes'),
   ]);
   if (catCache) {
     estado.catalogo = catCache.dados;
     estado.clientes = cliCache?.dados ?? [];
     estado.visitas = visCache?.dados ?? [];
+    estado.cotacoes = cotCache?.dados ?? [];
     estado.atualizadoEm = catCache.gravadoEm;
     estado.daCache = true;
     avisar();
@@ -71,21 +123,21 @@ export async function atualizar() {
   avisar();
 
   try {
-    const [catalogo, clientes, visitas] = await Promise.all([
+    const [catalogo, clientes, visitas, cotacoes] = await Promise.all([
       buscarTudo('catalogo',
         'codigo_sigma, codigo_fabricante, descricao, valor_unitario_centavos, ipi, st, categoria, grupo, saldo, status_estoque, atualizado_em',
         'descricao'),
-      buscarTudo('clientes',
-        'id, codigo, nome, origem, status, contato, telefone, whatsapp, email, logradouro, bairro, cidade, uf, cep, lat, lng, geo_precisao, grupo_economico, notas, ultima_visita',
-        'nome'),
+      buscarClientes(),
       buscarTudo('visitas',
         'id, cliente_id, representante_id, nome_cliente, data, hora, duracao_minutos, status, objetivo, observacoes, resultado, atualizado_em',
         'data'),
+      buscarCotacoes(),
     ]);
 
     estado.catalogo = catalogo;
     estado.clientes = clientes;
     estado.visitas = visitas;
+    estado.cotacoes = cotacoes;
     estado.atualizadoEm = new Date().toISOString();
     estado.daCache = false;
 
@@ -93,6 +145,7 @@ export async function atualizar() {
       guardar('catalogo', catalogo),
       guardar('clientes', clientes),
       guardar('visitas', visitas),
+      guardar('cotacoes', cotacoes),
     ]);
   } catch (erro) {
     // Offline com cache é situação normal, não erro para alarmar.
@@ -141,6 +194,39 @@ export async function salvarCliente(cliente) {
 
   sincronizarFila();
   return registro;
+}
+
+/**
+ * Grava a cotação no histórico do cliente.
+ *
+ * Os itens vão como JSON — é uma FOTOGRAFIA do momento. O preço muda toda
+ * semana; o histórico precisa preservar o que foi realmente cotado, não o
+ * preço de hoje.
+ */
+export async function salvarCotacao(cotacao) {
+  if (!recursos.cotacoes) {
+    console.warn('Histórico indisponível: tabela cotacoes ainda não existe.');
+    return null;
+  }
+  const registro = { ...cotacao, atualizado_em: new Date().toISOString() };
+
+  const i = estado.cotacoes.findIndex((c) => c.id === registro.id);
+  if (i >= 0) estado.cotacoes[i] = { ...estado.cotacoes[i], ...registro };
+  else estado.cotacoes.unshift(registro);
+
+  await guardar('cotacoes', estado.cotacoes);
+  await enfileirar('cotacoes', registro);
+  avisar();
+
+  sincronizarFila();
+  return registro;
+}
+
+/** Cotações de um cliente, da mais recente para a mais antiga. */
+export function cotacoesDoCliente(clienteId) {
+  return estado.cotacoes
+    .filter((c) => c.cliente_id === clienteId)
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
 }
 
 export async function excluirVisita(id) {

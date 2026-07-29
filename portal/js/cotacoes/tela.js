@@ -9,14 +9,14 @@
  *    frente do cliente, é o que este módulo evita.
  */
 
-import { estado, aoMudar } from '../nucleo/dados.js';
+import { estado, aoMudar, salvarCotacao } from '../nucleo/dados.js';
 import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
-import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
-import { esc, avisar, vazio, confirmar } from '../nucleo/ui.js';
+import { formatarBRL, formatarNumero, formatarPercentual, hojeISO } from '../nucleo/moeda.js';
+import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel } from '../nucleo/ui.js';
+import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from '../carteira/formulario.js';
 import { calcularLinha, calcularTotais, rotuloEstoque, sanitizarParaCliente } from './calculo.js';
 import { gerarPedidoHTML } from './exportar.js';
 import { empresa, pedido } from './dadosPedido.js';
-import { abrirPainel } from '../nucleo/ui.js';
 import { perfil } from '../supabase.js';
 
 const RASCUNHO = 'cotacao_rascunho';
@@ -26,6 +26,7 @@ let itensDaCotacao = new Map();
 let clienteId = null;
 let observacoes = '';
 let indice = null;
+let indiceClientes = null;
 let resultadosBusca = [];
 let selecionado = 0;
 let soComEstoque = false;
@@ -108,24 +109,100 @@ function redesenhar(alvo) {
   ligarEventos(alvo);
 }
 
+/**
+ * Seletor de cliente com busca.
+ *
+ * Um <select> com 328 opções é inutilizável: rolar até "Refrigeração Icaraí"
+ * leva mais tempo que digitar "icarai". Aqui é campo de busca com resultados,
+ * casando nome, código, CNPJ, bairro e cidade.
+ */
 function blocoCliente(cliente) {
-  const opcoes = estado.clientes
-    .map((c) => `<option value="${esc(c.id)}" ${c.id === clienteId ? 'selected' : ''}>
-      ${esc(c.nome)} — ${esc(c.cidade || '')}</option>`).join('');
+  if (cliente) {
+    return `<div class="cartao" style="margin-bottom:12px">
+      <div class="cartao__corpo" style="padding:12px 16px">
+        <div class="entre" style="align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div class="forte">${esc(cliente.nome)}</div>
+            <div class="minusculo suave" style="margin-top:2px">
+              ${esc(cliente.codigo)}
+              ${cliente.cnpj ? ` · CNPJ ${esc(formatarCNPJ(cliente.cnpj))}` : ''}
+              ${cliente.contato ? ` · ${esc(cliente.contato)}` : ''}
+            </div>
+            <div class="minusculo suave">
+              ${esc([cliente.logradouro, cliente.bairro, cliente.cidade, cliente.uf]
+                .filter(Boolean).join(', '))}
+              ${cliente.cep ? ` · CEP ${esc(cliente.cep)}` : ''}
+              ${cliente.telefone ? ` · ${esc(cliente.telefone)}` : ''}
+            </div>
+            ${!cliente.cnpj ? `<div class="minusculo" style="margin-top:4px;color:var(--cor-atencao)">
+              ⚠️ Sem CNPJ — o campo sai em branco no pedido.
+              <button class="btn btn--pequeno" id="cot-add-cnpj"
+                      style="margin-left:6px">Preencher</button>
+            </div>` : ''}
+          </div>
+          <button class="btn btn--pequeno" id="cot-trocar-cliente">Trocar</button>
+        </div>
+      </div>
+    </div>`;
+  }
 
   return `<div class="cartao" style="margin-bottom:12px">
     <div class="cartao__corpo" style="padding:12px 16px">
-      <label class="rotulo" for="cot-cliente">Cliente</label>
-      <select class="campo" id="cot-cliente">
-        <option value="">— selecione para preencher o cabeçalho do pedido —</option>
-        ${opcoes}
-      </select>
-      ${cliente ? `<p class="minusculo suave" style="margin:6px 0 0">
-        ${esc([cliente.logradouro, cliente.bairro, cliente.cidade, cliente.uf].filter(Boolean).join(', '))}
-        ${cliente.cep ? ` · CEP ${esc(cliente.cep)}` : ''}
-        ${cliente.telefone ? ` · ${esc(cliente.telefone)}` : ''}
-      </p>` : ''}
+      <div class="entre" style="gap:10px;align-items:flex-end">
+        <div style="flex:1">
+          <label class="rotulo" for="cot-cliente-busca">Cliente</label>
+          <div class="campo-busca">
+            <input class="campo" id="cot-cliente-busca" type="search" autocomplete="off"
+                   placeholder="Nome, código, CNPJ, bairro ou cidade…"
+                   aria-label="Buscar cliente">
+          </div>
+        </div>
+        <button class="btn" id="cot-novo-cliente">+ Novo cliente</button>
+      </div>
+      <div id="cot-cliente-resultados" style="margin-top:8px"></div>
     </div>
+  </div>`;
+}
+
+function desenharClientes(termo) {
+  const caixa = document.getElementById('cot-cliente-resultados');
+  if (!caixa) return;
+
+  if (!termo.trim()) {
+    caixa.innerHTML = `<p class="minusculo suave" style="margin:4px 0 0">
+      ${estado.clientes.length} clientes na carteira. Digite para filtrar.</p>`;
+    return;
+  }
+
+  if (!indiceClientes || indiceClientes.length !== estado.clientes.length) {
+    indiceClientes = criarIndice(estado.clientes, (c) =>
+      [c.nome, c.codigo, digitosCNPJ(c.cnpj), c.bairro, c.cidade, c.contato]);
+  }
+
+  const achados = buscar(indiceClientes, termo, 12);
+  if (!achados.length) {
+    caixa.innerHTML = `<p class="pequeno suave" style="margin:8px 0 0">
+      Nenhum cliente encontrado. Use "+ Novo cliente" para cadastrar.</p>`;
+    return;
+  }
+
+  caixa.innerHTML = `<div style="max-height:260px;overflow-y:auto;
+      border:1px solid var(--cor-borda);border-radius:var(--raio)">
+    <table class="tabela"><tbody>
+      ${achados.map((c) => `<tr data-cliente="${esc(c.id)}" style="cursor:pointer">
+        <td>
+          <div class="forte">${esc(c.nome)}</div>
+          <div class="minusculo suave">
+            ${esc(c.codigo)}
+            ${c.cnpj ? ` · ${esc(formatarCNPJ(c.cnpj))}` : ' · sem CNPJ'}
+          </div>
+        </td>
+        <td class="pequeno" style="width:170px">
+          ${esc(c.bairro || '')}<div class="minusculo suave">${esc(c.cidade || '')}</div>
+        </td>
+        <td style="width:120px">${seloStatus(c.status)}</td>
+      </tr>`).join('')}
+    </tbody></table>
   </div>`;
 }
 
@@ -476,10 +553,40 @@ function ligarEventos(alvo) {
     if (linha) adicionar(linha.dataset.add);
   });
 
-  alvo.querySelector('#cot-cliente')?.addEventListener('change', (e) => {
-    clienteId = e.target.value || null;
+  // ---- seletor de cliente com busca
+  const buscaCliente = alvo.querySelector('#cot-cliente-busca');
+  if (buscaCliente) {
+    const rodar = comAtraso((v) => desenharClientes(v), 120);
+    buscaCliente.addEventListener('input', (e) => rodar(e.target.value));
+    desenharClientes(buscaCliente.value);
+  }
+
+  alvo.querySelector('#cot-cliente-resultados')?.addEventListener('click', (e) => {
+    const linha = e.target.closest('[data-cliente]');
+    if (!linha) return;
+    clienteId = linha.dataset.cliente;
     salvarRascunho();
     redesenhar(alvo);
+  });
+
+  alvo.querySelector('#cot-trocar-cliente')?.addEventListener('click', () => {
+    clienteId = null;
+    salvarRascunho();
+    redesenhar(alvo);
+    document.getElementById('cot-cliente-busca')?.focus();
+  });
+
+  alvo.querySelector('#cot-novo-cliente')?.addEventListener('click', () => {
+    abrirFormularioCliente(null, (novo) => {
+      clienteId = novo.id;          // já entra selecionado na cotação
+      salvarRascunho();
+      redesenhar(alvo);
+    });
+  });
+
+  alvo.querySelector('#cot-add-cnpj')?.addEventListener('click', () => {
+    const c = estado.clientes.find((x) => x.id === clienteId);
+    if (c) abrirFormularioCliente(c, () => redesenhar(alvo));
   });
 
   alvo.querySelectorAll('[data-qtd]').forEach((campo) => {
@@ -555,6 +662,41 @@ function imprimir(alvo) {
   const limpa = sanitizarParaCliente(cotacao);
   document.getElementById('area-impressao').innerHTML = gerarPedidoHTML(limpa);
   window.print();
+
+  // Registra no histórico do cliente. Os itens vão como fotografia do
+  // momento: o preço muda toda semana, o histórico não pode mudar junto.
+  if (cliente) {
+    const dados = pedido.ler();
+    salvarCotacao({
+      id: `cot_${hojeISO().replace(/-/g, '')}_${cliente.codigo}_${Date.now().toString(36)}`,
+      equipe_id: perfil()?.equipe_id,
+      representante_id: perfil()?.id,
+      cliente_id: cliente.id,
+      nome_cliente: cliente.nome,
+      numero: dados.numero || null,
+      data: hojeISO(),
+      situacao: 'enviada',
+      total_produtos_centavos: totais.totalProdutos,
+      total_ipi_centavos: totais.totalIpi,
+      total_com_ipi_centavos: totais.totalComIpi,
+      quantidade_itens: totais.quantidadeItens,
+      itens: linhas.map(({ item, calculo }) => ({
+        codigo_sigma: item.codigo_sigma,
+        descricao: item.descricao,
+        quantidade: calculo.qtd,
+        valor_unitario_centavos: item.valor_unitario_centavos,
+        ipi: item.ipi,
+        valor_com_ipi_centavos: calculo.valorComIpi,
+      })),
+      observacoes: observacoes || null,
+      condicoes: {
+        pagamento: dados.condicoesPagamento || null,
+        prazo: dados.prazoEntrega || null,
+        validade: dados.validade || null,
+        frete: dados.frete || null,
+      },
+    });
+  }
 
   // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
   pedido.avancarNumero();

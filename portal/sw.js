@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v2';
+const VERSAO = 'portal-v3';
 
 const CASCA = [
   './',
@@ -33,6 +33,7 @@ const CASCA = [
   './js/cotacoes/exportar.js',
   './js/cotacoes/dadosPedido.js',
   './js/carteira/tela.js',
+  './js/carteira/formulario.js',
   './js/mapa/tela.js',
   './js/agenda/tela.js',
 ];

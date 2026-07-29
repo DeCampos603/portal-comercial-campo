@@ -20,7 +20,7 @@ export function avisar(mensagem, tipo = 'info', ms = 3200) {
   const torrada = comoElemento(`
     <div class="torrada faixa faixa--${tipo}" role="status" style="
       position:fixed; left:50%; transform:translateX(-50%);
-      bottom:calc(var(--altura-rodape) + 16px); z-index:100;
+      bottom:calc(var(--altura-rodape) + 16px); z-index:3000;
       box-shadow:var(--sombra-alta); margin:0; max-width:90vw;">
       ${esc(mensagem)}
     </div>`);

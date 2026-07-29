@@ -13,6 +13,7 @@
 
 import { formatarBRL, formatarPercentual, formatarData } from '../nucleo/moeda.js';
 import { esc } from '../nucleo/ui.js';
+import { formatarCNPJ } from '../carteira/formulario.js';
 
 /** Valor preenchido, ou uma linha para completar à caneta. */
 const ou = (valor, largura = '120px') => (String(valor ?? '').trim()
@@ -62,6 +63,12 @@ export function gerarPedidoHTML(cotacao) {
       <tr>
         <td class="campo-rotulo">Cliente:</td>
         <td colspan="3">${esc(cliente?.nome || '')}</td>
+      </tr>
+      <tr>
+        <td class="campo-rotulo">CNPJ:</td>
+        <td>${ou(formatarCNPJ(cliente?.cnpj), '150px')}</td>
+        <td class="campo-rotulo">I.E.:</td>
+        <td>${ou(cliente?.inscricao_estadual, '90px')}</td>
       </tr>
       <tr>
         <td class="campo-rotulo">Endereço:</td>

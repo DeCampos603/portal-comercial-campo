@@ -5,8 +5,19 @@
 /* ------------------------------------------------------------ casca */
 #app { display: flex; flex-direction: column; min-height: 100%; }
 
+/* ---------------------------------------------------------------------
+   Camadas (z-index) — o Leaflet chega a 1000 internamente (medido, não
+   suposto: panes 400-700, controles 800, e o container de controles 1000).
+   Empatar com ele não basta — por isso o mapa é ISOLADO (ver #mapa-tela) e
+   a interface fica acima.
+        mapa e conteúdo .....    0  (contido, ver #mapa-tela)
+        cabeçalho / abas ..... 1000
+        painel lateral ....... 2000
+        aviso temporário ..... 3000
+   --------------------------------------------------------------------- */
+
 .cabecalho {
-  position: sticky; top: 0; z-index: 40;
+  position: sticky; top: 0; z-index: 1000;
   display: flex; align-items: center; gap: var(--e3);
   height: var(--altura-cabecalho); padding: 0 var(--e4);
   background: var(--cor-superficie);
@@ -34,7 +45,7 @@
   .cabecalho .abas { display: none; }
   .conteudo { padding: var(--e3); padding-bottom: calc(var(--altura-rodape) + var(--e6)); }
   .abas-mobile {
-    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     background: var(--cor-superficie); border-top: 1px solid var(--cor-borda);
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -168,7 +179,7 @@
 
 /* -------------------------------------------------------- painel lateral */
 .painel {
-  position: fixed; inset: 0; z-index: 60;
+  position: fixed; inset: 0; z-index: 2000;
   display: flex; justify-content: flex-end;
   background: rgb(0 0 0 / .35);
 }
@@ -206,3 +217,17 @@
 .quebrar { overflow-wrap: anywhere; }
 .grade { display: grid; gap: var(--e3); }
 @media (min-width: 861px) { .grade--2 { grid-template-columns: 1fr 1fr; } }
+
+/* ---------------------------------------------------------------------
+   Contém o Leaflet num contexto de empilhamento próprio.
+
+   `isolation: isolate` faz os z-index internos dele (medidos em até 1000,
+   o mesmo valor do cabeçalho) serem resolvidos DENTRO desta caixa — nada escapa por cima do cabeçalho
+   ou do painel lateral, mesmo que o Leaflet mude de versão e aumente os
+   próprios valores.
+   --------------------------------------------------------------------- */
+#mapa-tela {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}

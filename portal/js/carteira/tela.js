@@ -6,9 +6,10 @@
  * sistema vivo: vender é para pessoas, não para CNPJs.
  */
 
-import { estado, aoMudar, salvarCliente } from '../nucleo/dados.js';
+import { estado, aoMudar, salvarCliente, cotacoesDoCliente, recursos } from '../nucleo/dados.js';
+import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from './formulario.js';
 import { criarIndice, buscar, comAtraso, normalizar } from '../nucleo/busca.js';
-import { formatarData, diasDesde } from '../nucleo/moeda.js';
+import { formatarData, diasDesde, formatarBRL } from '../nucleo/moeda.js';
 import { esc, vazio, seloStatus, linkContato, linkRota, enderecoLinha, abrirPainel, avisar } from '../nucleo/ui.js';
 
 /** Filtros compartilhados com o mapa — filtrar aqui reflete lá. */
@@ -30,7 +31,7 @@ export function clientesFiltrados() {
   if (filtros.texto.trim()) {
     if (!indice || indice.length !== estado.clientes.length) {
       indice = criarIndice(estado.clientes, (c) =>
-        [c.nome, c.codigo, c.bairro, c.cidade, c.contato, c.email]);
+        [c.nome, c.codigo, digitosCNPJ(c.cnpj), c.bairro, c.cidade, c.contato, c.email]);
     }
     lista = buscar(indice, filtros.texto, 2000);
   }
@@ -91,6 +92,7 @@ function desenhar(alvo) {
       <div class="cartao__cabecalho">
         <h2 style="flex:1">Clientes</h2>
         <span class="pequeno suave">${lista.length} de ${estado.clientes.length}</span>
+        <button class="btn btn--pequeno btn--primario" id="car-novo">+ Novo cliente</button>
       </div>
       ${lista.length ? tabela(lista) : vazio('🔍', 'Nenhum cliente com esses filtros',
         'Ajuste a busca ou limpe os filtros.')}
@@ -110,7 +112,9 @@ function tabela(lista) {
     return `<tr data-cliente="${esc(c.id)}" style="cursor:pointer">
       <td>
         <div class="forte">${esc(c.nome)}</div>
-        <div class="minusculo suave">${esc(c.codigo)}${c.contato ? ` · ${esc(c.contato)}` : ''}</div>
+        <div class="minusculo suave">${esc(c.codigo)}${
+          c.cnpj ? ` · ${esc(formatarCNPJ(c.cnpj))}` : ''}${
+          c.contato ? ` · ${esc(c.contato)}` : ''}</div>
       </td>
       <td>${seloStatus(c.status)}
         ${c.origem === 'recuperacao' ? '<span class="selo selo--info">⭐ recuperação</span>' : ''}</td>
@@ -160,6 +164,9 @@ function ligar(alvo) {
     filtros.semVisita = e.target.checked; redesenhar();
   });
 
+  alvo.querySelector('#car-novo')?.addEventListener('click', () =>
+    abrirFormularioCliente(null, () => redesenhar()));
+
   alvo.querySelectorAll('[data-cliente]').forEach((linha) =>
     linha.addEventListener('click', () => abrirFicha(linha.dataset.cliente)));
 
@@ -182,6 +189,8 @@ export function abrirFicha(id) {
 
   const precisao = { rua: 'nível de rua', bairro: 'aproximado (bairro)', cidade: 'muito aproximado' };
 
+  const cotacoes = cotacoesDoCliente(c.id);
+
   abrirPainel(c.nome, `
     <div class="grade">
       <div>${seloStatus(c.status)}
@@ -189,6 +198,10 @@ export function abrirFicha(id) {
         <span class="selo">${esc(c.codigo)}</span></div>
 
       <div class="pequeno">
+        ${c.cnpj
+          ? `🏢 CNPJ ${esc(formatarCNPJ(c.cnpj))}${
+              c.inscricao_estadual ? ` · I.E. ${esc(c.inscricao_estadual)}` : ''}<br>`
+          : '<span style="color:var(--cor-atencao)">⚠️ Sem CNPJ cadastrado</span><br>'}
         📍 ${esc(enderecoLinha(c))}<br>
         ${c.cep ? `CEP ${esc(c.cep)}` : ''}
         ${c.geo_precisao ? `<span class="suave"> · localização ${esc(precisao[c.geo_precisao] ?? c.geo_precisao)}</span>` : ''}
@@ -201,6 +214,7 @@ export function abrirFicha(id) {
 
       <div class="linha" style="flex-wrap:wrap;gap:6px">
         ${linkContato(c)} ${linkRota(c)}
+        <button class="btn btn--pequeno" id="ficha-editar">✏️ Editar cadastro</button>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--cor-borda)">
@@ -219,6 +233,10 @@ export function abrirFicha(id) {
 
       <hr style="border:none;border-top:1px solid var(--cor-borda)">
 
+      ${blocoHistoricoCotacoes(cotacoes)}
+
+      <hr style="border:none;border-top:1px solid var(--cor-borda)">
+
       <div>
         <h3>Histórico de visitas</h3>
         ${visitas.length ? `<ul style="margin:0;padding-left:18px" class="pequeno">
@@ -230,6 +248,9 @@ export function abrirFicha(id) {
       </div>
     </div>`);
 
+  document.getElementById('ficha-editar').addEventListener('click', () =>
+    abrirFormularioCliente(c, () => abrirFicha(c.id)));
+
   document.getElementById('ficha-salvar').addEventListener('click', async () => {
     await salvarCliente({
       id: c.id,
@@ -238,4 +259,78 @@ export function abrirFicha(id) {
     });
     avisar('Salvo.', 'info');
   });
+}
+
+/**
+ * Histórico de cotações do cliente.
+ *
+ * Além da lista, calcula o ritmo de compra: com 2+ cotações dá para estimar
+ * o intervalo médio e dizer se o cliente está atrasado em relação ao próprio
+ * padrão. É a base do alarme de recompra que o usuário pediu para o futuro —
+ * aqui aparece como observação, ainda sem disparar nada.
+ */
+function blocoHistoricoCotacoes(cotacoes) {
+  if (!recursos.cotacoes) {
+    return `<div>
+      <h3>Cotações</h3>
+      <p class="pequeno suave">
+        Histórico indisponível: falta aplicar a migração
+        <code>03-cnpj-e-cotacoes.sql</code> no Supabase.
+      </p>
+    </div>`;
+  }
+
+  if (!cotacoes.length) {
+    return `<div>
+      <h3>Cotações</h3>
+      <p class="pequeno suave">Nenhuma cotação registrada para este cliente.</p>
+    </div>`;
+  }
+
+  const total = cotacoes.reduce((a, c) => a + (c.total_com_ipi_centavos || 0), 0);
+  const ticket = Math.round(total / cotacoes.length);
+  const diasUltima = diasDesde(cotacoes[0].data);
+
+  // Intervalo médio entre cotações: só faz sentido com pelo menos duas.
+  let previsao = '';
+  if (cotacoes.length > 1) {
+    const primeira = new Date(`${cotacoes[cotacoes.length - 1].data}T12:00`);
+    const ultima = new Date(`${cotacoes[0].data}T12:00`);
+    const intervalo = Math.round(
+      (ultima - primeira) / 86400000 / (cotacoes.length - 1));
+
+    if (intervalo > 0) {
+      const atraso = diasUltima - intervalo;
+      previsao = atraso > 0
+        ? `<div class="faixa faixa--atencao pequeno" style="margin:8px 0 0">
+             ⏰ Costuma cotar a cada ~${intervalo} dias, e já se passaram
+             ${diasUltima}. Está ${atraso} dia(s) além do próprio ritmo.
+           </div>`
+        : `<div class="faixa pequeno" style="margin:8px 0 0">
+             📆 Costuma cotar a cada ~${intervalo} dias. Próxima prevista
+             em ~${Math.abs(atraso)} dia(s).
+           </div>`;
+    }
+  }
+
+  return `<div>
+    <h3>Cotações</h3>
+    <div class="linha pequeno" style="gap:14px;flex-wrap:wrap;margin-bottom:6px">
+      <span><strong>${cotacoes.length}</strong> cotação(ões)</span>
+      <span>Total <strong>${formatarBRL(total)}</strong></span>
+      <span>Ticket médio <strong>${formatarBRL(ticket)}</strong></span>
+    </div>
+    ${previsao}
+    <ul style="margin:8px 0 0;padding-left:18px" class="pequeno">
+      ${cotacoes.slice(0, 10).map((c) => `<li>
+        ${formatarData(c.data)} — <strong>${formatarBRL(c.total_com_ipi_centavos)}</strong>
+        · ${c.quantidade_itens} item(ns)
+        ${c.numero ? ` · nº ${esc(c.numero)}` : ''}
+      </li>`).join('')}
+    </ul>
+    ${cotacoes.length > 10
+      ? `<p class="minusculo suave" style="margin:6px 0 0">
+           e mais ${cotacoes.length - 10} anteriores.</p>`
+      : ''}
+  </div>`;
 }
