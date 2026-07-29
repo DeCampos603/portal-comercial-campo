@@ -7,7 +7,9 @@
 # Por que workflow em vez de "Deploy from a branch": o modo por branch só
 # aceita a raiz `/` ou `/docs`. Publicar `/portal` exigiria renomear a pasta.
 #
-# ATIVAR (uma vez): Settings -> Pages -> Source: "GitHub Actions"
+# Não precisa configurar nada no painel: `enablement: true` liga o Pages
+# na primeira execução. Se a organização bloquear isso, o caminho manual
+# é Settings -> Pages -> Source: "GitHub Actions".
 
 name: Publicar no GitHub Pages
 
@@ -54,7 +56,12 @@ jobs:
           fi
           echo "OK: nenhuma chave secreta nem dado privado em portal/"
 
+      # `enablement: true` liga o Pages sozinho na primeira execução.
+      # Sem isso, a action falha com "Get Pages site failed / Not Found"
+      # enquanto ninguém tiver ido no painel habilitar na mão.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Empacotar a pasta portal
         uses: actions/upload-pages-artifact@v3
