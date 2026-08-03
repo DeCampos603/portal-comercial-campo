@@ -9,7 +9,7 @@
 
 import { estado, aoMudar, salvarVisita, excluirVisita } from '../nucleo/dados.js';
 import { formatarData, formatarHora, hojeISO, diasDesde } from '../nucleo/moeda.js';
-import { esc, vazio, seloStatus, linkContato, linkRota, abrirPainel, avisar, confirmar } from '../nucleo/ui.js';
+import { esc, vazio, seloStatus, ORIGENS, linkContato, linkRota, abrirPainel, avisar, confirmar } from '../nucleo/ui.js';
 import { perfil } from '../supabase.js';
 
 const OBJETIVOS = {
@@ -163,7 +163,14 @@ function pontuar(cliente) {
   if (dias === null) { pontos += 90; motivos.push('nunca visitado'); }
   else { pontos += Math.min(dias / 30, 12) * 10; motivos.push(`${dias} dias sem visita`); }
 
-  if (cliente.origem === 'recuperacao') { pontos += 40; motivos.push('em recuperação'); }
+  // Cliente ativo pesa MAIS que em recuperação: manter quem já compra custa
+  // menos que reconquistar quem parou, e uma visita perdida aqui é receita
+  // que estava garantida.
+  const carteira = ORIGENS[cliente.origem];
+  if (carteira?.prioridade) {
+    pontos += carteira.prioridade;
+    motivos.push(cliente.origem === 'ativo' ? 'cliente ativo' : 'em recuperação');
+  }
   if (cliente.status === 'Atrasado') { pontos += 25; motivos.push('inadimplente'); }
   else if (cliente.status === 'Com Título') { pontos += 10; motivos.push('com título em aberto'); }
 

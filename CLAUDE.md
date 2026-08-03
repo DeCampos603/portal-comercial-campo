@@ -15,8 +15,8 @@ portal único, rápido e confiável, com quatro módulos:
 1. **Cotações** — monta o pedido no mesmo modelo do Excel da Sigma, mas com busca
    instantânea, IPI calculado na hora, semáforo de estoque à vista e exportação de
    PDF limpo para o cliente.
-2. **Carteira** — os 328 clientes navegáveis, filtráveis e pesquisáveis, com status
-   comercial e histórico de contato.
+2. **Carteira** — os clientes navegáveis, filtráveis e pesquisáveis, com status
+   comercial, classificação (ativo / recuperação / inativo) e histórico de contato.
 3. **Mapa** — todos os clientes plotados no mapa do Rio, para enxergar quem está perto
    de quem e montar roteiro por região.
 4. **Agenda** — agendar, coordenar e registrar as visitas, sincronizada entre PC e
@@ -116,8 +116,14 @@ Agente-Portal-Comercial/
   lavadora, ar-condicionado, micro-ondas, ventilador, tanquinho.
 - **Território:** Rio de Janeiro (289/300 clientes), com pontas em ES (9), RS (1), MG (1).
 - **Catálogo:** 521 itens com preço, 24 grupos, 579 itens no catálogo de estoque.
-- **Carteira:** 328 clientes — 300 inativos + 28 em recuperação, sem sobreposição.
-- **Status comercial:** `Sem Título` (232), `Com Título` (88), `Atrasado` (8).
+- **Carteira:** 379 clientes em **três** classificações (`origem`):
+  **51 ativos** · 28 em recuperação · 300 inativos.
+  🔴 A carga inicial trouxe só os 328 que **pararam** de comprar. A lista de
+  ativos chegou depois (03/08/2026) — o portal passou um tempo mostrando a
+  carteira morta e ignorando a viva. Ao receber planilha de clientes, confirme
+  **qual** carteira é antes de importar.
+- **Status comercial:** `Sem Título` (232), `Com Título` (88), `Atrasado` (8)
+  na carga inicial; os ativos vieram 37 `Com Título`, 13 `Sem Título`, 1 `Atrasado`.
 
 Detalhes completos em `conhecimento/01-negocio-e-dominio.md`.
 

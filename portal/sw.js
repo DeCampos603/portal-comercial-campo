@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v6';
+const VERSAO = 'portal-v7';
 
 const CASCA = [
   './',

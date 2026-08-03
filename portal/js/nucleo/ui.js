@@ -85,6 +85,32 @@ export function seloStatus(status) {
   return `<span class="selo ${classe ? `selo--${classe}` : ''}">${icone} ${esc(status || 'Sem status')}</span>`;
 }
 
+/**
+ * As três carteiras, em um lugar só.
+ *
+ * `ativo` chegou depois da carga inicial — os clientes que efetivamente
+ * compram não estavam no portal, só os 300 inativos e os 28 em recuperação.
+ * A definição vive aqui porque cinco telas dependiam dela e cada uma tinha
+ * o seu `origem === 'recuperacao'` solto: acrescentar uma classificação
+ * significava lembrar de mexer em todas, e esquecer uma não dava erro —
+ * só fazia a carteira nova sumir daquela tela.
+ *
+ * `prioridade` é o peso na fila de visitas: quem compra hoje vale mais que
+ * quem parou de comprar.
+ */
+export const ORIGENS = {
+  ativo:       { rotulo: 'Ativos',         selo: '💚 ativo',        classe: 'ok',   prioridade: 50 },
+  recuperacao: { rotulo: 'Em recuperação', selo: '⭐ recuperação',  classe: 'info', prioridade: 40 },
+  inativo:     { rotulo: 'Inativos',       selo: '',                classe: '',     prioridade: 0 },
+};
+
+/** Selo da carteira. Devolve '' para inativo — é o caso comum, não merece ruído. */
+export function seloOrigem(origem) {
+  const o = ORIGENS[origem];
+  if (!o?.selo) return '';
+  return `<span class="selo selo--${o.classe}">${o.selo}</span>`;
+}
+
 /** Link de telefone / WhatsApp. */
 export function linkContato(cliente) {
   const partes = [];

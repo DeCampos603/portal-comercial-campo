@@ -173,6 +173,12 @@ def main():
     parser.add_argument("--simular", action="store_true", help="Confere sem gravar.")
     parser.add_argument("--so-catalogo", action="store_true")
     parser.add_argument("--so-clientes", action="store_true")
+    # Carteira nova chega de tempos em tempos (a lista de ativos veio depois
+    # da carga inicial). O envio é upsert por (equipe_id, codigo), então
+    # carregar um arquivo parcial atualiza quem já existe e insere o resto,
+    # sem tocar em quem não está no arquivo.
+    parser.add_argument("--clientes", type=Path,
+                        help="JSON de clientes (padrão: dados/privado/clientes.json)")
     args = parser.parse_args()
 
     carregar_env()
@@ -181,7 +187,7 @@ def main():
     representante_id = exigir("REPRESENTANTE_ID")
 
     catalogo_json = RAIZ / "dados" / "privado" / "catalogo.json"
-    clientes_json = RAIZ / "dados" / "privado" / "clientes.json"
+    clientes_json = args.clientes or (RAIZ / "dados" / "privado" / "clientes.json")
 
     print("=" * 58)
     print("CARGA INICIAL NO SUPABASE")
@@ -223,7 +229,9 @@ def main():
             raise SystemExit(f"🔴 Não encontrei {clientes_json}. Rode importar_clientes.py antes.")
         clientes = montar_clientes(clientes_json, equipe_id, representante_id)
         com_geo = sum(1 for c in clientes if c["lat"] is not None)
-        print(f"\nCLIENTES: {len(clientes)}")
+        print(f"\nCLIENTES: {len(clientes)}  ({clientes_json.name})")
+        from collections import Counter
+        print(f"   origem: {dict(Counter(c['origem'] for c in clientes))}")
         print(f"   {com_geo} com coordenada · {len(clientes) - com_geo} sem")
         if com_geo == 0:
             print("   ⚠️  Nenhum cliente geocodificado — o mapa ficará vazio.")

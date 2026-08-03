@@ -88,7 +88,7 @@ create table if not exists public.clientes (
 
   codigo  text not null,                     -- código Sigma do cliente
   nome    text not null,
-  origem  text not null check (origem in ('inativo','recuperacao')),
+  origem  text not null check (origem in ('ativo','recuperacao','inativo')),
   status  text check (status in ('Sem Título','Com Título','Atrasado')),
 
   contato   text,                            -- 100% vazio na origem: preenchido no portal

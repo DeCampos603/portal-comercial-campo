@@ -10,7 +10,7 @@ import { estado, aoMudar, salvarCliente, cotacoesDoCliente, recursos } from '../
 import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from './formulario.js';
 import { criarIndice, buscar, comAtraso, normalizar } from '../nucleo/busca.js';
 import { formatarData, diasDesde, formatarBRL } from '../nucleo/moeda.js';
-import { esc, vazio, seloStatus, linkContato, linkRota, enderecoLinha, abrirPainel, avisar } from '../nucleo/ui.js';
+import { esc, vazio, seloStatus, seloOrigem, ORIGENS, linkContato, linkRota, enderecoLinha, abrirPainel, avisar } from '../nucleo/ui.js';
 
 /** Filtros compartilhados com o mapa — filtrar aqui reflete lá. */
 export const filtros = {
@@ -76,9 +76,9 @@ function desenhar(alvo) {
               ${seloStatus(s)}
             </label>`).join('')}
           <span style="width:1px;height:18px;background:var(--cor-borda)"></span>
-          ${[['inativo', 'Inativos'], ['recuperacao', 'Em recuperação']].map(([v, r]) => `
+          ${Object.entries(ORIGENS).map(([v, { rotulo }]) => `
             <label class="linha pequeno" style="gap:5px;cursor:pointer">
-              <input type="checkbox" data-origem="${v}" ${filtros.origem.has(v) ? 'checked' : ''}> ${r}
+              <input type="checkbox" data-origem="${v}" ${filtros.origem.has(v) ? 'checked' : ''}> ${rotulo}
             </label>`).join('')}
           <label class="linha pequeno" style="gap:5px;cursor:pointer">
             <input type="checkbox" id="car-sem-visita" ${filtros.semVisita ? 'checked' : ''}>
@@ -117,7 +117,7 @@ function tabela(lista) {
           c.contato ? ` · ${esc(c.contato)}` : ''}</div>
       </td>
       <td>${seloStatus(c.status)}
-        ${c.origem === 'recuperacao' ? '<span class="selo selo--info">⭐ recuperação</span>' : ''}</td>
+        ${seloOrigem(c.origem)}</td>
       <td class="pequeno">${esc(c.bairro || '')}<div class="minusculo suave">${esc(c.cidade || '')}</div></td>
       <td class="pequeno">${esc(c.telefone || '—')}</td>
       <td class="pequeno">${c.ultima_visita
@@ -194,7 +194,7 @@ export function abrirFicha(id) {
   abrirPainel(c.nome, `
     <div class="grade">
       <div>${seloStatus(c.status)}
-        ${c.origem === 'recuperacao' ? '<span class="selo selo--info">⭐ em recuperação</span>' : ''}
+        ${seloOrigem(c.origem)}
         <span class="selo">${esc(c.codigo)}</span></div>
 
       <div class="pequeno">

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Converte as planilhas de clientes (inativos + em recuperação) em clientes.json.
+Converte as planilhas de clientes (ativos, em recuperação, inativos) em clientes.json.
 
 Aplica as regras de limpeza de conhecimento/04-dados-de-clientes.md:
   - remove o sufixo redundante "[codigo]" do nome
@@ -8,8 +8,13 @@ Aplica as regras de limpeza de conhecimento/04-dados-de-clientes.md:
   - descarta a coluna "Representante" (valor único em toda a base)
   - deriva grupoEconomico e whatsapp
 
+As três carteiras são opcionais e podem ser importadas juntas ou separadas.
+Cliente que aparece em mais de uma fica com a classificação MAIS ativa —
+ver ORIGENS abaixo.
+
 Uso:
-    python importar_clientes.py --inativos a.xlsx --recuperacao b.xlsx \
+    python importar_clientes.py --ativos c.xlsx \
+        --inativos a.xlsx --recuperacao b.xlsx \
         --saida dados/privado/clientes.json
 """
 
@@ -35,6 +40,19 @@ for _fluxo in (sys.stdout, sys.stderr):
         pass
 
 FUSO_BR = timezone(timedelta(hours=-3))
+
+# Carteiras, em ordem de PRECEDÊNCIA: da mais ativa para a menos.
+#
+# A ordem não é enfeite. Um cliente pode constar em duas listas — foi
+# recuperado e voltou a comprar, mas ainda figura no relatório de inativos.
+# Classificá-lo como inativo esconderia justamente quem está comprando.
+# Na dúvida, o portal assume a situação mais favorável e deixa o representante
+# corrigir; o contrário faria o cliente sumir da lista de quem visitar.
+ORIGENS = (
+    ("ativos", "ativo"),
+    ("recuperacao", "recuperacao"),
+    ("inativos", "inativo"),
+)
 
 # Colunas (0-indexado, na ordem em que aparecem na Sheet0)
 COL_CODIGO, COL_NOME, COL_REPRESENTANTE, COL_CONTATO = 0, 1, 2, 3
@@ -200,31 +218,42 @@ def derivar_grupo_economico(clientes):
 
 def main():
     parser = argparse.ArgumentParser(description="Importa as carteiras de clientes.")
-    parser.add_argument("--inativos", type=Path, required=True)
-    parser.add_argument("--recuperacao", type=Path, required=True)
+    for opcao, _ in ORIGENS:
+        parser.add_argument(f"--{opcao}", type=Path)
     parser.add_argument("--saida", type=Path, default=Path("dados/privado/clientes.json"))
     args = parser.parse_args()
 
-    for caminho in (args.inativos, args.recuperacao):
+    informadas = [(getattr(args, opcao.replace("-", "_")), origem)
+                  for opcao, origem in ORIGENS
+                  if getattr(args, opcao.replace("-", "_"))]
+    if not informadas:
+        raise SystemExit("Informe ao menos uma carteira: "
+                         + ", ".join(f"--{o}" for o, _ in ORIGENS))
+
+    clientes, avisos, vistos = [], [], {}
+    for caminho, origem in informadas:      # já vem na ordem de precedência
         if not caminho.exists():
             raise SystemExit(f"Arquivo não encontrado: {caminho}")
 
-    inativos, avisos_a = ler_planilha(args.inativos, "inativo")
-    recuperacao, avisos_b = ler_planilha(args.recuperacao, "recuperacao")
-    avisos = avisos_a + avisos_b
+        lidos, avisos_desta = ler_planilha(caminho, origem)
+        avisos += avisos_desta
 
-    # Os dois arquivos devem ser conjuntos disjuntos.
-    codigos_inativos = {c["codigo"] for c in inativos}
-    codigos_recuperacao = {c["codigo"] for c in recuperacao}
-    intersecao = codigos_inativos & codigos_recuperacao
-    if intersecao:
-        avisos.append(
-            f"🔴 {len(intersecao)} clientes aparecem nos DOIS arquivos: "
-            f"{', '.join(sorted(intersecao)[:5])} — mantido o registro de 'recuperação'."
-        )
-        inativos = [c for c in inativos if c["codigo"] not in intersecao]
+        repetidos = []
+        for cliente in lidos:
+            anterior = vistos.get(cliente["codigo"])
+            if anterior:
+                repetidos.append(f"{cliente['codigo']} (fica como {anterior})")
+                continue
+            vistos[cliente["codigo"]] = origem
+            clientes.append(cliente)
 
-    clientes = inativos + recuperacao
+        if repetidos:
+            avisos.append(
+                f"⚠️  {len(repetidos)} cliente(s) de '{origem}' já vieram numa "
+                f"carteira mais ativa: {', '.join(repetidos[:5])}"
+                + (" …" if len(repetidos) > 5 else "")
+            )
+
     clientes.sort(key=lambda c: c["nome"] or "")
     grupos = derivar_grupo_economico(clientes)
 
@@ -251,8 +280,10 @@ def main():
     print(f"CLIENTES IMPORTADOS — {agora:%d/%m/%Y %H:%M}")
     print("=" * 58)
     print(f"Total              {len(clientes)}")
-    print(f"  inativos         {sum(1 for c in clientes if c['origem'] == 'inativo')}")
-    print(f"  em recuperação   {sum(1 for c in clientes if c['origem'] == 'recuperacao')}")
+    for _, origem in ORIGENS:
+        quantos = sum(1 for c in clientes if c["origem"] == origem)
+        if quantos:
+            print(f"  {origem:<16} {quantos}")
     print(f"\nStatus             {dict(status)}")
     print(f"UF                 {dict(ufs)}")
     print(f"Cidades            {len({c['endereco']['cidade'] for c in clientes})}")

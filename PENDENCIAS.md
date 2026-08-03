@@ -43,7 +43,19 @@ Consequência: `SMV-42655-W` (sem categoria) e os 12 capacitores "Ventilador"
   - Campo em branco vira **linha para preencher à caneta** no PDF — nunca um
     valor inventado.
 
+- [x] **Logomarcas — RECEBIDAS (03/08/2026).** SIBB e M A Joaquim estão embutidas
+  em base64 no cabeçalho do pedido. Ver `ferramentas/preparar_logos.py`.
+  Nunca baixar logo da internet: o arquivo vem do usuário.
+
+- [x] **Carteira de ATIVOS — RECEBIDA (03/08/2026).** 51 clientes, 50 deles
+  inéditos. Ver `conhecimento/04-dados-de-clientes.md`.
+
 ## 🟡 Ainda em aberto (não bloqueiam)
+
+- [ ] **SIBB ou Sigma?** A logo recebida é da **SIBB**, mas o rodapé do pedido diz
+  "consultar a Sigma" e "Autorização Sigma", e a coluna do catálogo é "Código Sigma".
+  São a mesma empresa, duas empresas, ou marca e distribuidor? Enquanto não se sabe,
+  o texto do rodapé fica como está — mudar por conta própria seria inventar.
 
 - [ ] **Pedido mínimo** (valor ou quantidade), se existir — hoje o portal não valida.
 - [ ] **Fluxo de aprovação.** O rodapé tem "Responsável pela Aprovação - Representante"

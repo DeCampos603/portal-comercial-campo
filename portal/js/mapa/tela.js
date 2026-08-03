@@ -10,7 +10,7 @@
 
 import { estado, aoMudar } from '../nucleo/dados.js';
 import { MAPA_CENTRO, MAPA_ZOOM } from '../config.js';
-import { esc, vazio, seloStatus, linkContato, linkRota, enderecoLinha, avisar } from '../nucleo/ui.js';
+import { esc, vazio, seloStatus, seloOrigem, ORIGENS, linkContato, linkRota, enderecoLinha, avisar } from '../nucleo/ui.js';
 import { formatarData } from '../nucleo/moeda.js';
 import { filtros, clientesFiltrados, abrirFicha } from '../carteira/tela.js';
 import { agendarPara } from '../agenda/tela.js';
@@ -108,11 +108,16 @@ function desenharPinos() {
     // e um pino "cidade" não sustenta roteiro.
     const aproximado = c.geo_precisao && c.geo_precisao !== 'rua';
 
+    // Contorno destaca quem é carteira de trabalho — ativo e em recuperação.
+    // O preenchimento continua sendo o status financeiro: são duas
+    // informações diferentes e o representante precisa das duas no mesmo pino.
+    const destacado = ORIGENS[c.origem]?.prioridade > 0;
+
     const marcador = L.circleMarker([c.lat, c.lng], {
       radius: 7,
       fillColor: cor,
-      color: c.origem === 'recuperacao' ? '#14538a' : '#fff',
-      weight: c.origem === 'recuperacao' ? 3 : 1.5,
+      color: destacado ? '#14538a' : '#fff',
+      weight: destacado ? 3 : 1.5,
       opacity: 1,
       fillOpacity: aproximado ? 0.45 : 0.9,
     });
@@ -133,7 +138,7 @@ function popup(c) {
   return `<div style="min-width:220px;font-family:var(--fonte)">
     <div style="font-weight:700;margin-bottom:4px">${esc(c.nome)}</div>
     <div style="margin-bottom:6px">${seloStatus(c.status)}
-      ${c.origem === 'recuperacao' ? '<span class="selo selo--info">⭐ recuperação</span>' : ''}</div>
+      ${seloOrigem(c.origem)}</div>
     <div style="font-size:.8rem;margin-bottom:6px">
       📍 ${esc(enderecoLinha(c))}${esc(precisao[c.geo_precisao] ?? '')}<br>
       ${c.telefone ? `📞 ${esc(c.telefone)}<br>` : ''}

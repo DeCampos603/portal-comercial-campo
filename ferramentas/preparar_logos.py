@@ -19,11 +19,12 @@ Uso:
 
 import base64
 import io
+import statistics
 import sys
 from pathlib import Path
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageChops
 except ImportError:
     raise SystemExit("Falta a biblioteca Pillow.  pip install pillow")
 
@@ -38,8 +39,20 @@ PASTA = RAIZ / "portal" / "assets" / "logos"
 SAIDA = RAIZ / "portal" / "js" / "cotacoes" / "logos.js"
 
 LARGURA_ALVO = 300          # ~35 mm impressos a 200 dpi: nítido e leve
-LIMIAR_BRANCO = 242         # acima disto vira transparente
 EXTENSOES = (".png", ".jpg", ".jpeg", ".webp")
+SUFIXO_SAIDA = ".gerada.png"    # byproduto do script, nunca entrada
+
+# Faixa de distância de cor até o fundo que define o alfa do pixel.
+#
+# Abaixo do PISO é ruído de compressão, e vira transparente de verdade. Acima
+# da TOLERANCIA é desenho, e vira opaco. No meio fica a rampa que preserva o
+# antisserrilhado das bordas.
+#
+# 🔴 Sem o PISO, o ruído do JPEG dava alfa 5 a 22 ao fundo inteiro: um véu
+#    cinza sobre o papel, invisível na tela mas presente, e 75% da imagem em
+#    alfa parcial — o que triplicava o tamanho do PNG.
+PISO = 12
+TOLERANCIA = 40
 
 MARCAS = {
     "sibb": "SIBB — fabricante representado",
@@ -48,40 +61,81 @@ MARCAS = {
 
 
 def achar(nome):
+    """
+    O arquivo ORIGINAL da marca.
+
+    O `.gerada.png` é saída deste script e fica de fora de propósito: quando a
+    saída se chamava `{nome}.png`, a rodada seguinte a encontrava primeiro e
+    reprocessava o próprio resultado — recorte sobre recorte, reamostragem
+    sobre reamostragem, degradando a logo a cada execução sem avisar.
+    """
     for ext in EXTENSOES:
         for candidato in (PASTA / f"{nome}{ext}", PASTA / f"{nome.upper()}{ext}"):
-            if candidato.exists():
+            if candidato.exists() and not candidato.name.endswith(SUFIXO_SAIDA):
                 return candidato
     return None
+
+
+def cor_de_fundo(im):
+    """
+    A cor real da moldura, medida na borda — não presumida.
+
+    🔴 A versão anterior presumia fundo BRANCO (limiar fixo em 242). A logo da
+       M A Joaquim veio sobre papel cinza (~228): o recorte não recortava nada e
+       só 0,6% dos pixels viravam transparentes. O resultado seria um quadrado
+       cinza de 1024x1024 no cabeçalho do pedido — e nada no script acusaria
+       erro. Medir a borda funciona para fundo branco, cinza ou colorido.
+
+    Mediana e não média: um detalhe da arte encostando na borda desloca a média,
+    a mediana ignora.
+    """
+    largura, altura = im.size
+    borda = []
+    for x in range(0, largura, 2):
+        borda.append(im.getpixel((x, 0)))
+        borda.append(im.getpixel((x, altura - 1)))
+    for y in range(0, altura, 2):
+        borda.append(im.getpixel((0, y)))
+        borda.append(im.getpixel((largura - 1, y)))
+    return tuple(int(statistics.median(p[c] for p in borda)) for c in range(3))
 
 
 def processar(caminho):
     im = Image.open(caminho).convert("RGB")
     original = im.size
+    fundo = cor_de_fundo(im)
 
-    # Recorta a moldura branca — arte exportada costuma vir com muita sobra,
-    # que no PDF vira um bloco vazio ocupando espaço do cabeçalho.
-    cinza = im.convert("L")
-    caixa = cinza.point(lambda p: 255 if p < 245 else 0).getbbox()
+    # Distância de cada pixel até o fundo, canal de maior diferença.
+    # A rampa até TOLERANCIA preserva o antisserrilhado das bordas: com corte
+    # seco, o contorno da logo sai escadeado no papel.
+    diferenca = ImageChops.difference(im, Image.new("RGB", im.size, fundo))
+    r, g, b = diferenca.split()
+    alfa = ImageChops.lighter(ImageChops.lighter(r, g), b).point(
+        lambda p: 0 if p <= PISO else min(255, (p - PISO) * 255 // (TOLERANCIA - PISO)))
+
+    # Recorta pela máscara, não pelo brilho: arte exportada vem com muita sobra,
+    # que no PDF vira um bloco vazio ocupando o cabeçalho. O limiar alto aqui
+    # ignora o ruído de compressão, que de outro modo devolveria a imagem toda.
+    caixa = alfa.point(lambda p: 255 if p > 128 else 0).getbbox()
     if caixa:
-        im = im.crop(caixa)
+        im, alfa = im.crop(caixa), alfa.crop(caixa)
 
-    # Fundo branco vira transparente: sem isso aparece um retângulo branco
-    # sobre o papel, visível quando o PDF tem qualquer cor de fundo.
     im = im.convert("RGBA")
-    px = im.load()
-    for y in range(im.size[1]):
-        for x in range(im.size[0]):
-            r, g, b, _ = px[x, y]
-            if r > LIMIAR_BRANCO and g > LIMIAR_BRANCO and b > LIMIAR_BRANCO:
-                px[x, y] = (r, g, b, 0)
+    im.putalpha(alfa)
 
     altura = round(im.size[1] * LARGURA_ALVO / im.size[0])
     im = im.resize((LARGURA_ALVO, altura), Image.LANCZOS)
 
+    # Zera o RGB onde o pixel é 100% transparente — só DEPOIS de redimensionar.
+    # Antes, a interpolação puxaria esse preto para dentro das bordas e a logo
+    # sairia com um halo escuro. Feito aqui, não muda um pixel visível e o PNG
+    # comprime muito melhor, porque a área invisível vira uma cor só.
+    visivel = im.getchannel("A").point(lambda p: 255 if p else 0)
+    im = Image.composite(im, Image.new("RGBA", im.size, (0, 0, 0, 0)), visivel)
+
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
-    return im, buf.getvalue(), original
+    return im, buf.getvalue(), original, fundo
 
 
 def main():
@@ -100,11 +154,12 @@ def main():
             print(f"  ⬜ {nome:<12} não encontrada em portal/assets/logos/")
             continue
 
-        im, dados, original = processar(caminho)
-        (PASTA / f"{nome}.png").write_bytes(dados)
+        im, dados, original, fundo = processar(caminho)
+        (PASTA / f"{nome}{SUFIXO_SAIDA}").write_bytes(dados)
         embutidas[nome] = base64.b64encode(dados).decode()
-        print(f"  ✅ {nome:<12} {original[0]}x{original[1]} → "
+        print(f"  ✅ {nome:<12} {caminho.name}  {original[0]}x{original[1]} → "
               f"{im.size[0]}x{im.size[1]}  ({len(dados)/1024:.1f} KB)")
+        print(f"     fundo detectado rgb{fundo} → transparente")
 
     linhas = [
         "/**",

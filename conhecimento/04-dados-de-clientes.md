@@ -1,9 +1,33 @@
 # 04 — Dados de clientes: importação e limpeza
 
+## 🔴 São TRÊS carteiras, não duas
+
+A carga inicial recebeu `Clientes inativos.xlsx` e `Clientes em recuperação.xlsx` —
+328 clientes que **pararam de comprar**. Faltava a carteira que sustenta o
+faturamento: os **ativos**, que só chegaram em 03/08/2026, num arquivo exportado
+com nome genérico (`cliente_<data>.xlsx`).
+
+Enquanto isso, o mapa, a agenda e a fila de visitas trabalhavam sobre a carteira
+morta e ignoravam a viva. Dos 51 ativos, **50 eram inéditos** — a sobreposição
+com os 328 foi de um único cliente.
+
+**Ao receber planilha de clientes, pergunte QUAL carteira é antes de importar.**
+O arquivo não diz, o layout é idêntico nos três casos, e classificar errado é
+invisível: nada falha, o cliente só aparece na gaveta errada.
+
+| `origem` | Quantos | Peso na fila de visitas |
+|---|---|---|
+| `ativo` | 51 | 50 |
+| `recuperacao` | 28 | 40 |
+| `inativo` | 300 | 0 |
+
+Precedência na importação: um cliente que aparece em duas listas fica com a
+**mais ativa**. O contrário o esconderia justamente por estar comprando.
+
 ## Formato de origem
 
-Ambos os arquivos (`Clientes inativos.xlsx` e `Clientes em recuperação.xlsx`) têm
-**exatamente o mesmo layout**: uma aba `Sheet0`, cabeçalho na linha 1, dados a partir da 2.
+Os três arquivos têm **exatamente o mesmo layout**: uma aba `Sheet0`,
+cabeçalho na linha 1, dados a partir da 2.
 
 | Col | Cabeçalho | Estado real |
 |---|---|---|

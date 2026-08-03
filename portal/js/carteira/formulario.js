@@ -268,7 +268,11 @@ export function abrirFormularioCliente(cliente = null, aoSalvar = null) {
       representante_id: perfil()?.id,
       codigo,
       nome,
-      origem: c.origem ?? 'recuperacao',   // cliente novo já nasce em trabalho ativo
+      // Cliente cadastrado à mão nasce ATIVO: o representante só o digita
+      // porque está trabalhando com ele agora. Antes nascia 'recuperacao',
+      // que era o mais próximo disponível — e o classificava como quem
+      // parou de comprar.
+      origem: c.origem ?? 'ativo',
       status: valor('cli-status'),
       cnpj: cnpj || null,
       inscricao_estadual: valor('cli-ie') || null,
