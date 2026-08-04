@@ -47,6 +47,37 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
   'PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
 /**
+ * Código provisório, para cliente que a Sigma ainda não cadastrou.
+ *
+ * O código continua obrigatório NO BANCO — é metade da chave única
+ * (equipe_id, codigo) que a importação de planilha usa para não duplicar
+ * cliente. Deixar a coluna nula quebraria essa proteção justamente no
+ * caminho que mais precisa dela.
+ *
+ * A solução é o portal gerar um, marcado como provisório e EDITÁVEL depois:
+ * o representante cadastra o prospect na hora da visita e troca pelo código
+ * real quando ele chegar. Sem isso, ou se cadastrava um código inventado
+ * (que colidiria com um real no futuro) ou não se cadastrava o cliente.
+ */
+const PREFIXO_PROVISORIO = 'TMP-';
+
+export function ehProvisorio(codigo) {
+  return String(codigo ?? '').toUpperCase().startsWith(PREFIXO_PROVISORIO);
+}
+
+function gerarCodigoProvisorio() {
+  const usados = new Set(estado.clientes.map((c) => String(c.codigo).toUpperCase()));
+  for (let tentativa = 0; tentativa < 20; tentativa++) {
+    const candidato = PREFIXO_PROVISORIO
+      + crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
+    if (!usados.has(candidato)) return candidato;
+  }
+  // 16^6 combinações: chegar aqui é praticamente impossível, mas devolver
+  // um código repetido seria pior que falhar de forma visível.
+  return `${PREFIXO_PROVISORIO}${Date.now().toString(36).toUpperCase()}`;
+}
+
+/**
  * Abre o formulário.
  * @param {object|null} cliente  null = novo
  * @param {(cliente) => void} aoSalvar
@@ -83,10 +114,23 @@ export function abrirFormularioCliente(cliente = null, aoSalvar = null) {
 
       <div class="grade grade--2">
         <div>
-          <label class="rotulo" for="cli-codigo">Código Sigma *</label>
-          <input class="campo" id="cli-codigo" value="${esc(c.codigo || '')}" required
-                 placeholder="Ex.: 21152" ${novo ? '' : 'readonly'}>
-          ${novo ? '' : '<p class="minusculo suave" style="margin:4px 0 0">Não editável — identifica o cliente.</p>'}
+          <label class="rotulo" for="cli-codigo">Código Sigma</label>
+          <input class="campo" id="cli-codigo" value="${esc(c.codigo || '')}"
+                 placeholder="Ex.: 21152"
+                 ${novo || ehProvisorio(c.codigo) ? '' : 'readonly'}>
+          ${(() => {
+            if (novo) {
+              return '<p class="minusculo suave" style="margin:4px 0 0">'
+                + 'Opcional. Em branco, o portal gera um provisório e você troca '
+                + 'quando a Sigma cadastrar.</p>';
+            }
+            if (ehProvisorio(c.codigo)) {
+              return '<p class="minusculo" style="margin:4px 0 0;color:var(--cor-atencao)">'
+                + '⚠️ Provisório — substitua pelo código real da Sigma.</p>';
+            }
+            return '<p class="minusculo suave" style="margin:4px 0 0">'
+              + 'Não editável — identifica o cliente.</p>';
+          })()}
         </div>
         <div>
           <label class="rotulo" for="cli-status">Situação</label>
@@ -245,14 +289,20 @@ export function abrirFormularioCliente(cliente = null, aoSalvar = null) {
     };
 
     const nome = valor('cli-nome');
-    const codigo = valor('cli-codigo');
     if (!nome) return falhar('A razão social é obrigatória.');
-    if (!codigo) return falhar('O código Sigma é obrigatório.');
+
+    // Sem código digitado, o portal gera um provisório. O cliente entra na
+    // carteira agora; o código real chega depois.
+    const codigo = valor('cli-codigo') || gerarCodigoProvisorio();
 
     // Código duplicado quebraria a chave única (equipe_id, codigo) só na
-    // sincronização — melhor barrar aqui, com mensagem clara.
-    if (novo && estado.clientes.some((x) => String(x.codigo) === codigo)) {
-      return falhar(`Já existe cliente com o código ${codigo}.`);
+    // sincronização — melhor barrar aqui, com mensagem clara. Vale também ao
+    // EDITAR: é justamente ao trocar o provisório pelo real que se pode
+    // digitar o código de um cliente que já existe.
+    const conflito = estado.clientes.find(
+      (x) => String(x.codigo) === codigo && x.id !== c.id);
+    if (conflito) {
+      return falhar(`O código ${codigo} já é do cliente "${conflito.nome}".`);
     }
 
     const cnpj = digitosCNPJ(valor('cli-cnpj'));

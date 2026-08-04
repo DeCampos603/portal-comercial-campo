@@ -7,7 +7,7 @@
  */
 
 import { estado, aoMudar, salvarCliente, cotacoesDoCliente, recursos } from '../nucleo/dados.js';
-import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from './formulario.js';
+import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ, ehProvisorio } from './formulario.js';
 import { criarIndice, buscar, comAtraso, normalizar } from '../nucleo/busca.js';
 import { formatarData, diasDesde, formatarBRL } from '../nucleo/moeda.js';
 import { esc, vazio, seloStatus, seloOrigem, ORIGENS, linkContato, linkRota, enderecoLinha, abrirPainel, avisar } from '../nucleo/ui.js';
@@ -112,7 +112,9 @@ function tabela(lista) {
     return `<tr data-cliente="${esc(c.id)}" style="cursor:pointer">
       <td>
         <div class="forte">${esc(c.nome)}</div>
-        <div class="minusculo suave">${esc(c.codigo)}${
+        <div class="minusculo suave">${ehProvisorio(c.codigo)
+          ? `<span style="color:var(--cor-atencao)">⚠️ ${esc(c.codigo)}</span>`
+          : esc(c.codigo)}${
           c.cnpj ? ` · ${esc(formatarCNPJ(c.cnpj))}` : ''}${
           c.contato ? ` · ${esc(c.contato)}` : ''}</div>
       </td>
@@ -195,7 +197,10 @@ export function abrirFicha(id) {
     <div class="grade">
       <div>${seloStatus(c.status)}
         ${seloOrigem(c.origem)}
-        <span class="selo">${esc(c.codigo)}</span></div>
+        <span class="selo ${ehProvisorio(c.codigo) ? 'selo--atencao' : ''}"
+              ${ehProvisorio(c.codigo)
+                ? 'title="Código provisório — troque pelo real da Sigma"' : ''}
+          >${ehProvisorio(c.codigo) ? '⚠️ ' : ''}${esc(c.codigo)}</span></div>
 
       <div class="pequeno">
         ${c.cnpj

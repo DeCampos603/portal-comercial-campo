@@ -5,11 +5,17 @@
 # SEGREDOS necessários (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                https://<projeto>.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY   chave secret do Supabase
-#   SHEETS_CSV_URL              CSV publicado da aba 'Precos'
+#   SHEETS_URL                  link de compartilhamento da planilha da Sigma
+#                               (o script aceita o link inteiro ou só o ID)
 #
 # 🔴 A service_role key ignora RLS por completo. Ela vive AQUI e só aqui —
 #    nunca no frontend, nunca commitada. Segredos do Actions não são
 #    expostos em logs nem para pull requests de forks.
+#
+# 🔴 O link da planilha também é SEGREDO, não configuração. A planilha está
+#    compartilhada como "qualquer pessoa com o link", e traz preço de custo,
+#    saldo de estoque e a aba de COMISSÃO. Commitar a URL num repositório
+#    público entregaria tudo isso a quem passasse por lá.
 #
 # Efeito colateral útil: a execução diária conta como atividade e impede
 # o projeto Supabase gratuito de ser pausado por inatividade (1 semana).
@@ -43,14 +49,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      # openpyxl é obrigatório: a planilha da Sigma é lida como XLSX, no
+      # formato original (cabeçalho na linha 19, três abas, catálogo lateral).
       - name: Instalar dependências
-        run: pip install --quiet requests
+        run: pip install --quiet requests openpyxl
 
       - name: Sincronizar
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SHEETS_CSV_URL: ${{ secrets.SHEETS_CSV_URL }}
+          SHEETS_URL: ${{ secrets.SHEETS_URL }}
+          SHEETS_CSV_URL: ${{ secrets.SHEETS_CSV_URL }}   # alternativa, se um dia houver aba limpa
         run: |
           python ferramentas/sincronizar_supabase.py \
             ${{ inputs.forcar && '--forcar' || '' }}

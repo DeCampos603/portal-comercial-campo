@@ -9,7 +9,11 @@ o catálogo anterior continua no ar e a Action falha com aviso.
 Variáveis de ambiente:
     SUPABASE_URL                  https://<projeto>.supabase.co
     SUPABASE_SERVICE_ROLE_KEY     chave secret (NUNCA vai para o frontend)
-    SHEETS_CSV_URL                CSV publicado da aba 'Precos'
+
+    E UMA das duas origens:
+    SHEETS_URL                    link (ou só o ID) da planilha no Google Sheets.
+                                  Lê o XLSX no formato original da Sigma.
+    SHEETS_CSV_URL                CSV publicado de uma aba 'Precos' já limpa.
 
 Uso:
     python sincronizar_supabase.py
@@ -24,11 +28,20 @@ import os
 import re
 import sys
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 try:
     import requests
 except ImportError:
     raise SystemExit("Falta a biblioteca requests.  pip install requests")
+
+# Reaproveita o parser da carga inicial em vez de escrever um segundo.
+# A planilha da Sigma não é uma tabela: é um formulário de pedido com o
+# cabeçalho na linha 19, três abas e um catálogo lateral. Manter duas
+# implementações disso significaria que a primeira mudança de layout
+# consertaria uma e deixaria a outra sincronizando dado errado em silêncio.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from importar_precos import importar as importar_xlsx  # noqa: E402
 
 for _fluxo in (sys.stdout, sys.stderr):
     try:
@@ -118,6 +131,64 @@ def baixar_csv(url):
     resposta.raise_for_status()
     resposta.encoding = "utf-8"
     return list(csv.reader(io.StringIO(resposta.text)))
+
+
+def url_de_exportacao(bruto):
+    """Aceita o link de compartilhamento inteiro ou só o ID do documento."""
+    texto = str(bruto).strip()
+    casa = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", texto)
+    identificador = casa.group(1) if casa else texto
+    return (f"https://docs.google.com/spreadsheets/d/{identificador}"
+            "/export?format=xlsx")
+
+
+def baixar_xlsx(bruto):
+    """
+    Baixa a planilha do Google Sheets como XLSX.
+
+    🔴 Planilha sem compartilhamento público devolve HTTP **200** com uma
+       página HTML de login. Sem esta conferência, o openpyxl receberia HTML,
+       falharia com "File is not a zip file" e ninguém entenderia por quê —
+       quando a causa é permissão, não formato.
+    """
+    url = url_de_exportacao(bruto)
+    resposta = requests.get(url, timeout=120)
+    resposta.raise_for_status()
+
+    tipo = resposta.headers.get("Content-Type", "")
+    if "html" in tipo.lower():
+        raise SystemExit(
+            "🔴 O Google devolveu uma página HTML, não a planilha.\n"
+            "   Quase sempre é permissão: a planilha precisa estar como\n"
+            "   'Qualquer pessoa com o link' → Leitor.\n"
+            f"   URL usada: {url}"
+        )
+    if not resposta.content.startswith(b"PK"):
+        raise SystemExit(f"🔴 O download não parece um XLSX ({tipo}).")
+
+    return io.BytesIO(resposta.content)
+
+
+def montar_itens_do_xlsx(conteudo):
+    """Traduz o retorno de importar_precos para as colunas do banco."""
+    itens, _comissoes, avisos, _lateral = importar_xlsx(conteudo)
+    for aviso in avisos[:10]:
+        print(f"   ⚠️  {aviso}")
+    if len(avisos) > 10:
+        print(f"   ⚠️  … e mais {len(avisos) - 10} aviso(s)")
+
+    return [{
+        "codigo_sigma": i["codigoSigma"],
+        "codigo_fabricante": i["codigoFabricante"],
+        "descricao": i["descricao"],
+        "valor_unitario_centavos": i["valorUnitarioCentavos"],
+        "ipi": i["ipi"],
+        "st": i["st"],
+        "categoria": i["categoria"],
+        "grupo": i["grupo"],
+        "saldo": i["saldo"],
+        # status_estoque NÃO é enviado: é coluna gerada pelo banco
+    } for i in itens]
 
 
 def montar_itens(linhas):
@@ -244,16 +315,26 @@ def main():
 
     url = os.environ.get("SUPABASE_URL")
     chave = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    sheets_url = os.environ.get("SHEETS_URL")
     csv_url = os.environ.get("SHEETS_CSV_URL")
-    if not all([url, chave, csv_url]):
-        raise SystemExit("🔴 Defina SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e SHEETS_CSV_URL.")
+
+    if not all([url, chave]):
+        raise SystemExit("🔴 Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.")
+    if not (sheets_url or csv_url):
+        raise SystemExit("🔴 Defina SHEETS_URL (planilha da Sigma) "
+                         "ou SHEETS_CSV_URL (aba 'Precos' publicada).")
 
     agora = datetime.now(FUSO_BR)
     print(f"SINCRONIZAÇÃO — {agora:%d/%m/%Y %H:%M}")
     print(f"{'=' * 58}")
 
-    print("Baixando CSV do Google Sheets…")
-    itens = montar_itens(baixar_csv(csv_url))
+    # SHEETS_URL tem precedência: é a planilha real, no formato original.
+    if sheets_url:
+        print("Baixando a planilha (XLSX) do Google Sheets…")
+        itens = montar_itens_do_xlsx(baixar_xlsx(sheets_url))
+    else:
+        print("Baixando CSV do Google Sheets…")
+        itens = montar_itens(baixar_csv(csv_url))
     print(f"   {len(itens)} itens lidos")
 
     print("Lendo catálogo atual do Supabase…")
@@ -262,12 +343,16 @@ def main():
 
     bloqueios, avisos = conferir_sanidade(itens, atuais)
 
+    # Item sem saldo conhecido NÃO é "ok" — é desconhecido. Contar junto
+    # inflaria o verde e esconderia exatamente o que precisa de atenção.
+    sem_dado = sum(1 for i in itens if i["saldo"] is None)
     sem_estoque = sum(1 for i in itens
                       if i["saldo"] is not None and i["saldo"] < SALDO_SEM_ESTOQUE)
     baixo = sum(1 for i in itens
                 if i["saldo"] is not None and SALDO_SEM_ESTOQUE <= i["saldo"] < SALDO_BAIXO)
+    ok = len(itens) - sem_estoque - baixo - sem_dado
     print(f"\n🚦 Estoque: 🔴 {sem_estoque} sem · 🟡 {baixo} baixo · "
-          f"🟢 {len(itens) - sem_estoque - baixo} ok")
+          f"🟢 {ok} ok · ⬜ {sem_dado} sem dado")
 
     if avisos:
         print("\nAvisos:")
