@@ -227,6 +227,40 @@ function areaImpressao() {
 do que é redesenhado. Vale para a folha de impressão, para painéis modais e para
 qualquer coisa cujo tempo de vida seja diferente do da tela que a criou.
 
+### 🔴 Espere as imagens antes de `window.print()`
+
+`window.print()` **fotografa a página no instante em que é chamado**. Imagem que
+ainda não terminou de decodificar simplesmente não entra.
+
+Embutir as logos em base64 resolve a ida à rede, mas **não** a decodificação —
+e ela não é síncrona. Medido no navegador, no mesmo tick da atribuição:
+
+| Momento | `complete` | `naturalWidth` |
+|---|---|---|
+| Ao atribuir o `innerHTML` | `false` | `0` |
+| Um tick depois | `true` | `300` |
+
+O PDF saía com o texto inteiro e **nenhuma imagem** — `/Subtype /Image` zero no
+arquivo. E o defeito é invisível em teste: qualquer verificação feita um
+instante depois já encontra tudo pronto. Só aparece no papel.
+
+```js
+function esperarImagens(raiz, limiteMs = 3000) {
+  const pendentes = [...raiz.querySelectorAll('img')].filter((img) => !img.complete);
+  if (!pendentes.length) return Promise.resolve();
+  return Promise.race([
+    Promise.all(pendentes.map((img) => new Promise((pronto) => {
+      img.addEventListener('load', pronto, { once: true });
+      img.addEventListener('error', pronto, { once: true });
+    }))),
+    new Promise((pronto) => { setTimeout(pronto, limiteMs); }),   // nunca travar
+  ]);
+}
+```
+
+O tempo limite não é detalhe: uma imagem quebrada nunca pode impedir a emissão
+do pedido. Melhor sair sem logo do que não sair.
+
 ### Esconda o portal inteiro, não classe por classe
 
 A lista `.cabecalho, .abas, .btn…` esquece do que for criado depois. Enquanto ela
@@ -236,12 +270,22 @@ impressa numa segunda folha junto com o pedido do cliente.
 ```css
 @media print {
   /* `!important` é obrigatório: #tela-portal tem `display:contents` inline. */
-  #tela-portal, #carregando, #tela-login, #tela-sem-acesso { display: none !important; }
+  #app { display: none !important; }
 }
 ```
 
 O que for acrescentado à interface amanhã já nasce fora da impressão, sem depender
 de alguém lembrar de atualizar uma lista.
+
+**Esconda o contêiner, não só os filhos.** Esconder as quatro telas e deixar o
+`#app` em pé não bastava: ele tem `min-height: 100%` sobre `body { height: 100% }`,
+ou seja, uma caixa **vazia de uma página inteira**. Como `#area-impressao` mora
+depois dele no `body`, o pedido era empurrado para a folha 2 e saía uma primeira
+página em branco.
+
+Medido: `#app` ocupando 1265×720 em `y=0`, a folha começando em `y=720`, documento
+com 1298 px contra os 1123 px de uma A4 a 96 dpi. Com `#app` fora: folha em `y=0`,
+720 px no total, **uma página**.
 
 ## Acessibilidade (mínimo obrigatório)
 

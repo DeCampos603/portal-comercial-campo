@@ -8,15 +8,20 @@
 
 @media print {
   /* Só a folha do pedido vai ao papel.
-     Esconder o portal INTEIRO é mais seguro do que listar classe por classe:
+     Esconder a casca INTEIRA é mais seguro do que listar classe por classe:
      assim, o que for acrescentado à interface amanhã já nasce fora da
      impressão, sem ninguém precisar lembrar de atualizar esta lista.
      Antes disto, a tabela da tela de cotação — com a coluna de saldo — saía
      impressa numa segunda folha junto com o pedido do cliente.
-     `!important` é obrigatório: `#tela-portal` tem `display:contents` inline. */
-  #tela-portal, #carregando, #tela-login, #tela-sem-acesso {
-    display: none !important;
-  }
+     `!important` é obrigatório: `#tela-portal` tem `display:contents` inline.
+
+     🔴 Some o `#app`, não só os seus filhos. Escondendo apenas as telas, o
+        `#app` continuava no fluxo com `min-height:100%` sobre `body{height:100%}`
+        — uma caixa VAZIA de uma página inteira. Como `#area-impressao` mora
+        depois dele no `body`, o pedido era empurrado para a folha 2 e saía uma
+        primeira página em branco. Medido: #app 1265x720 em y=0, a folha
+        começando em y=720, documento com 1298px contra 1123px de uma A4. */
+  #app { display: none !important; }
 
   /* Some tudo que é interface (mantido: vale para o que estiver fora do portal) */
   .cabecalho, .abas, .abas-mobile, .campo-busca, .barra-acoes,

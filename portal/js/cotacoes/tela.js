@@ -770,6 +770,35 @@ function areaImpressao() {
   return area;
 }
 
+/**
+ * Espera as imagens da folha ficarem prontas.
+ *
+ * 🔴 `window.print()` fotografa a página no instante em que é chamado. Medido
+ *    no navegador: no tick em que o innerHTML é atribuído, as logos estão em
+ *    `complete=false, naturalWidth=0`; no tick seguinte, `complete=true,
+ *    naturalWidth=300`. Ser base64 evita a ida à rede, mas NÃO evita a
+ *    decodificação — e ela não é síncrona.
+ *
+ *    Sem esta espera, o PDF saía com o texto inteiro e NENHUMA imagem: zero
+ *    `/Subtype /Image` no arquivo. E o defeito era invisível em teste, porque
+ *    qualquer verificação feita um instante depois já encontra tudo pronto.
+ *
+ *    O tempo limite existe para que uma imagem quebrada nunca impeça a emissão
+ *    do pedido: melhor sair sem logo do que não sair.
+ */
+function esperarImagens(raiz, limiteMs = 3000) {
+  const pendentes = [...raiz.querySelectorAll('img')].filter((img) => !img.complete);
+  if (!pendentes.length) return Promise.resolve();
+
+  return Promise.race([
+    Promise.all(pendentes.map((img) => new Promise((pronto) => {
+      img.addEventListener('load', pronto, { once: true });
+      img.addEventListener('error', pronto, { once: true });
+    }))),
+    new Promise((pronto) => { setTimeout(pronto, limiteMs); }),
+  ]);
+}
+
 async function imprimir(alvo) {
   const linhas = montarLinhas();
   if (!linhas.length) { avisar('A cotação está vazia.', 'atencao'); return; }
@@ -796,8 +825,10 @@ async function imprimir(alvo) {
 
   // 🔒 Sanitiza ANTES de gerar o HTML: o dado interno nunca entra na página.
   const limpa = sanitizarParaCliente(cotacao);
-  areaImpressao().innerHTML = gerarPedidoHTML(limpa);
+  const area = areaImpressao();
+  area.innerHTML = gerarPedidoHTML(limpa);
 
+  await esperarImagens(area);
   window.print();
 
   // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
