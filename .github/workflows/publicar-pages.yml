@@ -39,7 +39,7 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Rede de segurança: se algum dado sensível escapar do .gitignore,
       # o deploy falha aqui em vez de publicar na internet.
@@ -59,15 +59,15 @@ jobs:
       # `enablement: true` liga o Pages sozinho na primeira execução.
       # Sem isso, a action falha com "Get Pages site failed / Not Found"
       # enquanto ninguém tiver ido no painel habilitar na mão.
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
       - name: Empacotar a pasta portal
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: portal
 
       - name: Publicar
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

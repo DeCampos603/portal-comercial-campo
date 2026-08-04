@@ -318,11 +318,31 @@ def main():
     sheets_url = os.environ.get("SHEETS_URL")
     csv_url = os.environ.get("SHEETS_CSV_URL")
 
-    if not all([url, chave]):
-        raise SystemExit("🔴 Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.")
+    # Diz QUAL variável falta e ONDE preenchê-la. A mensagem antiga listava as
+    # duas juntas — quem via o log da Action não sabia se tinha errado o nome
+    # de uma ou esquecido as duas, e a Action não mostra o valor dos segredos
+    # para conferir. Rodando no GitHub, a correção é em outro lugar (Settings →
+    # Secrets); rodando na máquina, é o .env. Apontar o lugar certo economiza
+    # a viagem errada.
+    no_github = bool(os.environ.get("GITHUB_ACTIONS"))
+    onde = ("Settings → Secrets and variables → Actions → New repository secret"
+            if no_github else "o arquivo .env na raiz do projeto")
+
+    faltando = [nome for nome, valor in
+                (("SUPABASE_URL", url), ("SUPABASE_SERVICE_ROLE_KEY", chave))
+                if not valor]
     if not (sheets_url or csv_url):
-        raise SystemExit("🔴 Defina SHEETS_URL (planilha da Sigma) "
-                         "ou SHEETS_CSV_URL (aba 'Precos' publicada).")
+        faltando.append("SHEETS_URL")
+
+    if faltando:
+        raise SystemExit(
+            f"🔴 Faltando: {', '.join(faltando)}\n"
+            f"   Defina em: {onde}\n\n"
+            "   SUPABASE_URL                https://<projeto>.supabase.co\n"
+            "   SUPABASE_SERVICE_ROLE_KEY   Supabase → Settings → API → service_role\n"
+            "   SHEETS_URL                  link de compartilhamento da planilha\n\n"
+            "   O nome do segredo precisa bater EXATAMENTE, inclusive maiúsculas."
+        )
 
     agora = datetime.now(FUSO_BR)
     print(f"SINCRONIZAÇÃO — {agora:%d/%m/%Y %H:%M}")
