@@ -23,9 +23,14 @@
         começando em y=720, documento com 1298px contra 1123px de uma A4. */
   #app { display: none !important; }
 
-  /* Some tudo que é interface (mantido: vale para o que estiver fora do portal) */
+  /* Some tudo que é interface FORA do #app — painel e torrada vivem
+     pendurados no <body>, então não somem junto com a casca.
+     ⚠️ `.torrada` entrou nesta lista quando deixou de ser uma `.faixa`: ela
+        aparece por 3 segundos, e o PDF pode ser gerado exatamente nesse
+        intervalo — sairia um aviso de tela impresso no pedido do cliente. */
+  .painel, .torrada,
   .cabecalho, .abas, .abas-mobile, .campo-busca, .barra-acoes,
-  .painel, .btn, .sinc, .faixa, .nao-imprimir { display: none !important; }
+  .btn, .sinc, .faixa, .nao-imprimir { display: none !important; }
 
   /* 🔒 Dado interno NUNCA no papel */
   .comissao, .saldo, .categoria, .custo, .margem,

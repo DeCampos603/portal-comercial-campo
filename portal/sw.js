@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v10';
+const VERSAO = 'portal-v11';
 
 const CASCA = [
   './',
@@ -17,6 +17,9 @@ const CASCA = [
   './assets/css/base.css',
   './assets/css/componentes.css',
   './assets/css/impressao.css',
+  // A logo é usada pelo CSS (cabeçalho e login). Sem ela no cache, o portal
+  // offline abre sem marca nenhuma.
+  './assets/logos/majoaquim.gerada.png',
   './assets/vendor/supabase.js',
   './assets/vendor/leaflet/leaflet.js',
   './assets/vendor/leaflet/leaflet.css',

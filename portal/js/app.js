@@ -8,6 +8,7 @@
 import { entrar, sair, sessaoAtual, carregarPerfil, perfil } from './supabase.js';
 import { carregar, atualizar, estado, aoMudar, sincronizarFila } from './nucleo/dados.js';
 import { formatarDataHora, diasDesde } from './nucleo/moeda.js';
+import { icone } from './nucleo/ui.js';
 import { DIAS_ATE_TABELA_VELHA } from './config.js';
 
 import { montarCotacoes } from './cotacoes/tela.js';
@@ -17,11 +18,11 @@ import { montarMapa } from './mapa/tela.js';
 import { montarAgenda } from './agenda/tela.js';
 
 const SECOES = [
-  { hash: '#/cotacoes',  rotulo: 'Cotações',  icone: '💰', montar: montarCotacoes },
-  { hash: '#/historico', rotulo: 'Histórico', icone: '🗂️', montar: montarHistorico },
-  { hash: '#/carteira',  rotulo: 'Carteira',  icone: '👥', montar: montarCarteira },
-  { hash: '#/mapa',      rotulo: 'Mapa',      icone: '🗺️', montar: montarMapa },
-  { hash: '#/agenda',    rotulo: 'Agenda',    icone: '📅', montar: montarAgenda },
+  { hash: '#/cotacoes',  rotulo: 'Cotações',  icone: 'cotacoes',  montar: montarCotacoes },
+  { hash: '#/historico', rotulo: 'Histórico', icone: 'historico', montar: montarHistorico },
+  { hash: '#/carteira',  rotulo: 'Carteira',  icone: 'carteira',  montar: montarCarteira },
+  { hash: '#/mapa',      rotulo: 'Mapa',      icone: 'mapa',      montar: montarMapa },
+  { hash: '#/agenda',    rotulo: 'Agenda',    icone: 'agenda',    montar: montarAgenda },
 ];
 
 const el = (id) => document.getElementById(id);
@@ -89,7 +90,7 @@ el('btn-atualizar').addEventListener('click', () => atualizar());
 function montarAbas() {
   const html = (classeIcone) => SECOES.map((s) => `
     <a href="${s.hash}" data-hash="${s.hash}">
-      <span class="${classeIcone}" aria-hidden="true">${s.icone}</span>
+      <span class="${classeIcone}">${icone(s.icone)}</span>
       <span>${s.rotulo}</span>
     </a>`).join('');
   el('abas-desktop').innerHTML = html('');
@@ -124,11 +125,13 @@ function atualizarIndicador() {
   let classe = 'sinc';
   let texto;
 
-  if (estado.sincronizando) texto = '🔄 Sincronizando…';
-  else if (estado.pendentes > 0) { classe += ' sinc--pendente'; texto = `⏳ ${estado.pendentes} pendente(s)`; }
-  else if (estado.erro) { classe += ' sinc--erro'; texto = '⚠️ Erro'; }
-  else if (estado.daCache) { classe += ' sinc--pendente'; texto = '📴 Offline'; }
-  else texto = '✅ Sincronizado';
+  // Sem emoji: o estado é dito pelo PONTO colorido do CSS mais o texto. Emoji
+  // muda de desenho entre Windows, Android e iOS, e não alinha com o texto.
+  if (estado.sincronizando) { classe += ' sinc--sincronizando'; texto = 'Sincronizando…'; }
+  else if (estado.pendentes > 0) { classe += ' sinc--pendente'; texto = `${estado.pendentes} pendente(s)`; }
+  else if (estado.erro) { classe += ' sinc--erro'; texto = 'Erro'; }
+  else if (estado.daCache) { classe += ' sinc--pendente'; texto = 'Offline'; }
+  else texto = 'Sincronizado';
 
   alvo.className = classe;
   alvo.textContent = texto;

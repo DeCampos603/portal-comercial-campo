@@ -1,8 +1,17 @@
 /* =====================================================================
-   Componentes: casca, navegação, botões, campos, tabelas, selos.
+   Componentes — casca, navegação, botões, campos, tabelas, selos, painéis.
+
+   Regras que valem para o arquivo inteiro:
+
+   · Todo componente interativo tem os CINCO estados desenhados: repouso,
+     hover, foco, ativo e desabilitado. Faltar um deles é o que faz uma
+     interface "parecer amadora" sem que se saiba apontar por quê.
+   · Nada de valor solto: cor, espaço, raio e tempo saem dos tokens de
+     base.css. Um `padding: 13px` desalinha com todo o resto da tela.
+   · Alvo de toque mínimo de 44px no celular (WCAG 2.5.5).
    ===================================================================== */
 
-/* ------------------------------------------------------------ casca */
+/* ---------------------------------------------------------------- casca */
 #app { display: flex; flex-direction: column; min-height: 100%; }
 
 /* ---------------------------------------------------------------------
@@ -19,215 +28,602 @@
 .cabecalho {
   position: sticky; top: 0; z-index: 1000;
   display: flex; align-items: center; gap: var(--e3);
-  height: var(--altura-cabecalho); padding: 0 var(--e4);
-  background: var(--cor-superficie);
+  height: var(--altura-cabecalho);
+  padding: 0 var(--e5);
+  background: color-mix(in srgb, var(--cor-superficie) 82%, transparent);
+  /* O desfoque mantém a hierarquia quando a tabela rola por baixo: sem ele,
+     texto sobre texto por um instante a cada rolagem. */
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--cor-borda);
 }
-.cabecalho .marca { font-weight: 700; color: var(--cor-primaria); white-space: nowrap; }
+/* A logo substitui o texto no cabeçalho. O nome do portal já está na aba do
+   navegador e nas abas de navegação; repeti-lo aqui só rouba largura de quem
+   precisa dela — o indicador de sincronização e os botões. */
+.cabecalho .marca {
+  display: block; flex: none;
+  width: 132px; height: 30px;
+  background: url('../logos/majoaquim.gerada.png') left center/contain no-repeat;
+  font-size: 0;            /* o texto vira rótulo para leitor de tela */
+  color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  /* Mesma decisão do login: placa clara em vez de recolorir a marca. */
+  .cabecalho .marca {
+    background-color: #fff;
+    background-origin: content-box;
+    padding: 3px 7px;
+    width: 146px; height: 34px;
+    border-radius: var(--raio-sm);
+  }
+}
+@media (max-width: 860px) { .cabecalho .marca { width: 108px; height: 26px; } }
 .cabecalho .espaco { flex: 1; }
 
-.abas { display: flex; gap: var(--e1); }
+/* ------------------------------------------------------------ navegação */
+.abas { display: flex; gap: 2px; }
 .abas a {
+  position: relative;
   display: flex; align-items: center; gap: 6px;
-  padding: 7px var(--e3); border-radius: var(--raio);
+  padding: 7px var(--e3);
+  border-radius: var(--raio-sm);
   color: var(--cor-texto-suave); text-decoration: none;
-  font-size: .9rem; font-weight: 550; white-space: nowrap;
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+  white-space: nowrap;
+  transition: color var(--rapido) var(--curva),
+              background-color var(--rapido) var(--curva);
 }
+.abas a > span:first-child { display: grid; place-items: center; line-height: 0; }
+.abas a svg { width: 17px; height: 17px; opacity: .85; }
+.abas a[aria-current='page'] svg { opacity: 1; }
 .abas a:hover { background: var(--cor-superficie-2); color: var(--cor-texto); }
-.abas a[aria-current='page'] { background: var(--cor-primaria-clara); color: var(--cor-primaria); }
+.abas a[aria-current='page'] { color: var(--cor-primaria); font-weight: var(--peso-forte); }
+/* Sublinhado no lugar de pílula: marca a aba ativa sem competir com os
+   botões, que são os outros elementos coloridos da mesma barra. */
+.abas a[aria-current='page']::after {
+  content: ''; position: absolute;
+  left: var(--e3); right: var(--e3); bottom: -9px; height: 2px;
+  background: var(--cor-primaria);
+  border-radius: var(--raio-cheio) var(--raio-cheio) 0 0;
+}
 
-.conteudo { flex: 1; padding: var(--e4); max-width: 1500px; width: 100%; margin: 0 auto; }
+.conteudo {
+  flex: 1; width: 100%;
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+  padding: var(--e5) var(--e5) var(--e10);
+}
 
-/* Navegação inferior no celular */
 .abas-mobile { display: none; }
 
 @media (max-width: 860px) {
+  .cabecalho { padding: 0 var(--e3); }
   .cabecalho .abas { display: none; }
-  .conteudo { padding: var(--e3); padding-bottom: calc(var(--altura-rodape) + var(--e6)); }
+  .conteudo {
+    padding: var(--e3);
+    padding-bottom: calc(var(--altura-rodape) + var(--e8));
+  }
   .abas-mobile {
     display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-    background: var(--cor-superficie); border-top: 1px solid var(--cor-borda);
+    background: color-mix(in srgb, var(--cor-superficie) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+    border-top: 1px solid var(--cor-borda);
     padding-bottom: env(safe-area-inset-bottom);
   }
   .abas-mobile a {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 8px 4px; min-height: 56px; justify-content: center;
-    color: var(--cor-texto-suave); text-decoration: none; font-size: .68rem;
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 9px 4px; min-height: 56px; justify-content: center;
+    color: var(--cor-texto-suave); text-decoration: none;
+    font-size: var(--t-xs); font-weight: var(--peso-medio);
+    transition: color var(--rapido) var(--curva);
   }
-  .abas-mobile a[aria-current='page'] { color: var(--cor-primaria); }
-  .abas-mobile .icone { font-size: 1.15rem; line-height: 1; }
+  .abas-mobile a[aria-current='page'] { color: var(--cor-primaria); font-weight: var(--peso-forte); }
+  .abas-mobile .icone { display: grid; place-items: center; line-height: 0; }
+  .abas-mobile .icone svg { width: 21px; height: 21px; }
+  /* Traço no topo da aba ativa: no rodapé, cor sozinha é fraca demais para
+     marcar posição quando o polegar já cobre metade do ícone. */
+  .abas-mobile a[aria-current='page']::before {
+    content: ''; position: absolute; top: 0; width: 28px; height: 2px;
+    background: var(--cor-primaria); border-radius: 0 0 2px 2px;
+  }
+  .abas-mobile a { position: relative; }
 }
 
-/* ----------------------------------------------------------- botões */
+/* ================================================================ BOTÕES
+   Cinco variantes com uma hierarquia clara. Numa tela, UM botão primário:
+   se tudo é primário, nada é.
+        primário  — a ação principal (gerar o PDF, salvar)
+        padrão    — ação secundária, com contorno
+        fantasma  — ação terciária, sem peso visual
+        risco     — destrutivo, sempre com confirmação antes
+        pequeno   — modificador de tamanho, combina com qualquer variante
+   ================================================================== */
 .btn {
+  --btn-fundo: var(--cor-superficie);
+  --btn-texto: var(--cor-texto);
+  --btn-borda: var(--cor-borda-2);
+
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 38px; padding: 0 var(--e3);
-  border: 1px solid var(--cor-borda-forte); border-radius: var(--raio);
-  background: var(--cor-superficie); color: var(--cor-texto);
-  font: inherit; font-size: .875rem; font-weight: 550;
-  cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--btn-borda);
+  border-radius: var(--raio-sm);
+  background: var(--btn-fundo);
+  color: var(--btn-texto);
+  font-size: var(--t-sm); font-weight: var(--peso-forte);
+  line-height: 1;
+  white-space: nowrap; cursor: pointer;
+  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
+  transition: background-color var(--rapido) var(--curva),
+              border-color var(--rapido) var(--curva),
+              box-shadow var(--rapido) var(--curva),
+              transform var(--rapido) var(--curva);
 }
-.btn:hover { background: var(--cor-superficie-2); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:hover { background: var(--cor-superficie-2); border-color: var(--cor-borda-forte); }
+.btn:active { transform: translateY(.5px); box-shadow: none; }
+.btn:focus-visible { outline: 2px solid var(--cor-foco); outline-offset: 2px; }
+.btn:disabled, .btn[aria-disabled='true'] {
+  cursor: not-allowed; opacity: .55; box-shadow: none;
+  background: var(--cor-superficie-2); color: var(--cor-texto-desabilitado);
+}
+.btn:disabled:hover { border-color: var(--cor-borda-2); }
+
 .btn--primario {
-  background: var(--cor-primaria); border-color: var(--cor-primaria); color: #fff;
+  --btn-fundo: var(--cor-primaria);
+  --btn-texto: #fff;
+  --btn-borda: var(--cor-primaria);
+  box-shadow: 0 1px 2px rgb(4 63 108 / .24),
+              inset 0 1px 0 rgb(255 255 255 / .10);
 }
-.btn--primario:hover { background: var(--cor-primaria-forte); }
-.btn--risco { color: var(--cor-risco); border-color: var(--cor-risco); }
-.btn--risco:hover { background: var(--cor-risco-fundo); }
-.btn--pequeno { min-height: 30px; padding: 0 var(--e2); font-size: .8rem; }
-.btn--fantasma { border-color: transparent; background: transparent; }
-.btn--fantasma:hover { background: var(--cor-superficie-2); }
+.btn--primario:hover {
+  background: var(--cor-primaria-forte); border-color: var(--cor-primaria-forte);
+}
+@media (prefers-color-scheme: dark) {
+  /* No escuro o azul claro da marca precisa de texto ESCURO para ler. */
+  .btn--primario { --btn-texto: var(--azul-900); }
+  .btn--primario:hover { background: var(--cor-primaria-forte); }
+}
 
-@media (max-width: 860px) { .btn { min-height: 44px; } }
+.btn--risco {
+  --btn-texto: var(--risco-forte);
+  --btn-borda: var(--risco-borda);
+  --btn-fundo: var(--cor-superficie);
+}
+.btn--risco:hover {
+  background: var(--risco-fundo); border-color: var(--risco-base);
+}
 
-/* ----------------------------------------------------------- campos */
+.btn--fantasma {
+  --btn-borda: transparent; --btn-fundo: transparent;
+  --btn-texto: var(--cor-texto-suave);
+  box-shadow: none;
+}
+.btn--fantasma:hover {
+  background: var(--cor-superficie-2); color: var(--cor-texto);
+  border-color: transparent;
+}
+
+.btn--pequeno { min-height: 30px; padding: 0 var(--e2); font-size: var(--t-xs); }
+
+@media (max-width: 860px) {
+  .btn { min-height: 44px; padding: 0 var(--e4); }
+  .btn--pequeno { min-height: 36px; padding: 0 var(--e3); }
+}
+
+/* ================================================================ CAMPOS */
 .campo {
-  width: 100%; min-height: 38px; padding: 7px var(--e3);
-  border: 1px solid var(--cor-borda-forte); border-radius: var(--raio);
-  background: var(--cor-superficie); color: var(--cor-texto);
-  font: inherit; font-size: .9rem;
+  width: 100%; min-height: 38px;
+  padding: 8px var(--e3);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-sm);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  font-size: var(--t-sm);
+  transition: border-color var(--rapido) var(--curva),
+              box-shadow var(--rapido) var(--curva);
 }
-.campo::placeholder { color: var(--cor-texto-suave); }
-.campo:focus { border-color: var(--cor-primaria); }
+.campo::placeholder { color: var(--cor-texto-desabilitado); }
+.campo:hover:not(:disabled) { border-color: var(--cinza-500); }
+.campo:focus {
+  outline: none;
+  border-color: var(--cor-foco);
+  box-shadow: var(--anel-foco);
+}
+.campo:disabled, .campo[readonly] {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-suave);
+  cursor: not-allowed;
+}
+.campo[readonly] { cursor: default; }
+.campo[aria-invalid='true'], .campo.invalido {
+  border-color: var(--risco-base);
+}
+.campo[aria-invalid='true']:focus, .campo.invalido:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--risco-base) 22%, transparent);
+}
+.campo.valido { border-color: var(--ok-base); }
+
+select.campo {
+  /* A seta padrão do Windows é cinza-escura e quadrada; esta acompanha o
+     texto e some junto com ele quando o campo é desabilitado. */
+  appearance: none;
+  padding-right: var(--e8);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+textarea.campo { min-height: 76px; resize: vertical; line-height: 1.5; }
+
+.rotulo {
+  display: block; margin-bottom: 6px;
+  font-size: var(--t-xs); font-weight: var(--peso-forte);
+  color: var(--cor-texto-2);
+  letter-spacing: .005em;
+}
+
+/* Caixa de seleção — a do navegador tem 13px, cor do sistema operacional e
+   nenhum estado de foco decente. Os filtros do portal são quase todos
+   caixas de seleção; deixá-las padrão é deixar a parte mais usada da tela
+   fora do sistema. */
+input[type='checkbox'], input[type='radio'] {
+  appearance: none;
+  width: 17px; height: 17px; margin: 0; flex: none;
+  border: 1.5px solid var(--cor-borda-forte);
+  border-radius: 4px;
+  background: var(--cor-superficie);
+  cursor: pointer;
+  display: grid; place-content: center;
+  transition: background-color var(--rapido) var(--curva),
+              border-color var(--rapido) var(--curva);
+}
+input[type='radio'] { border-radius: 50%; }
+input[type='checkbox']:hover, input[type='radio']:hover { border-color: var(--cor-primaria-viva); }
+
+input[type='checkbox']::before {
+  content: ''; width: 10px; height: 10px;
+  transform: scale(0); transform-origin: center;
+  transition: transform var(--rapido) var(--curva-saida);
+  box-shadow: inset 1em 1em #fff;
+  /* O "tique" é uma forma, não uma fonte: não depende de emoji nem de ícone
+     externo, e acompanha o tamanho da caixa. */
+  clip-path: polygon(14% 45%, 0 60%, 39% 100%, 100% 22%, 84% 8%, 37% 70%);
+}
+input[type='radio']::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  transform: scale(0); transition: transform var(--rapido) var(--curva-saida);
+  box-shadow: inset 1em 1em #fff;
+}
+input[type='checkbox']:checked, input[type='radio']:checked {
+  background: var(--cor-primaria); border-color: var(--cor-primaria);
+}
+input[type='checkbox']:checked::before, input[type='radio']:checked::before { transform: scale(1); }
+input[type='checkbox']:focus-visible, input[type='radio']:focus-visible {
+  outline: 2px solid var(--cor-foco); outline-offset: 2px;
+}
+input[type='checkbox']:disabled, input[type='radio']:disabled {
+  background: var(--cor-superficie-2); border-color: var(--cor-borda-2); cursor: not-allowed;
+}
+@media (prefers-color-scheme: dark) {
+  /* Marca clara no escuro: o tique branco sumiria sobre o azul claro. */
+  input[type='checkbox']::before, input[type='radio']::before {
+    box-shadow: inset 1em 1em var(--azul-900);
+  }
+}
+
+/* A área de clique é o RÓTULO inteiro, não os 17px da caixa. */
+label.linha { cursor: pointer; user-select: none; }
+@media (max-width: 860px) {
+  label.linha { min-height: 40px; padding: 2px 0; }
+  input[type='checkbox'], input[type='radio'] { width: 20px; height: 20px; }
+}
+
 @media (max-width: 860px) {
   /* < 16px faz o iOS dar zoom ao focar o campo */
   .campo { min-height: 44px; font-size: 16px; }
 }
 
-.rotulo {
-  display: block; margin-bottom: var(--e1);
-  font-size: .8rem; font-weight: 600; color: var(--cor-texto-suave);
+/* Busca principal: maior que os outros campos porque é a ação de entrada
+   da tela de cotações — o representante começa o trabalho por ela. */
+.campo-busca {
+  min-height: 46px;
+  font-size: var(--t-md);
+  padding-left: var(--e10);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237F8F9F' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: var(--e3) 50%;
+  background-size: 19px;
 }
 
-.campo-busca { position: relative; }
-.campo-busca .campo { padding-left: 34px; }
-.campo-busca::before {
-  content: '🔍'; position: absolute; left: 10px; top: 50%;
-  transform: translateY(-50%); font-size: .85rem; opacity: .6; pointer-events: none;
-}
-
-/* ------------------------------------------------------------ cards */
+/* ================================================================ CARTÃO */
 .cartao {
   background: var(--cor-superficie);
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
-  box-shadow: var(--sombra);
+  box-shadow: var(--sombra-sutil);
+  overflow: hidden;
 }
 .cartao__cabecalho {
-  display: flex; align-items: center; gap: var(--e2);
-  padding: var(--e3) var(--e4); border-bottom: 1px solid var(--cor-borda);
+  display: flex; align-items: center; gap: var(--e3);
+  padding: var(--e3) var(--e4);
+  border-bottom: 1px solid var(--cor-borda);
+  background: var(--cor-superficie);
+  font-weight: var(--peso-forte);
+  font-size: var(--t-sm);
 }
 .cartao__corpo { padding: var(--e4); }
 
-/* ------------------------------------------------------------ selos */
-.selo {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 999px;
-  font-size: .72rem; font-weight: 650; white-space: nowrap;
-  background: var(--cor-neutro-fundo); color: var(--cor-neutro);
-}
-.selo--ok      { background: var(--cor-ok-fundo);      color: var(--cor-ok); }
-.selo--atencao { background: var(--cor-atencao-fundo); color: var(--cor-atencao); }
-.selo--risco   { background: var(--cor-risco-fundo);   color: var(--cor-risco); }
-.selo--info    { background: var(--cor-info-fundo);    color: var(--cor-info); }
+/* ============================================================== LAYOUT */
+.grade { display: grid; gap: var(--e4); }
+.grade--2 { grid-template-columns: 1fr 1fr; }
+@media (max-width: 640px) { .grade--2 { grid-template-columns: 1fr; } }
 
-/* ---------------------------------------------------------- tabelas */
-.tabela { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.linha { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e2); }
+.linha--fim { justify-content: flex-end; }
+.entre { justify-content: space-between; }
+
+.rolagem {
+  overflow-x: auto;
+  /* Sombra que só aparece quando há conteúdo cortado à direita: avisa que a
+     tabela continua, sem ocupar espaço quando não continua. */
+  background:
+    linear-gradient(to right, var(--cor-superficie) 30%, transparent),
+    linear-gradient(to left, var(--cor-superficie) 30%, transparent) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgb(16 24 40 / .10), transparent),
+    radial-gradient(farthest-side at 100% 50%, rgb(16 24 40 / .10), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* ============================================================== TABELAS */
+.tabela { width: 100%; font-size: var(--t-sm); }
 .tabela th {
   position: sticky; top: 0; z-index: 1;
-  padding: var(--e2) var(--e3); text-align: left;
-  background: var(--cor-superficie-2); color: var(--cor-texto-suave);
-  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  padding: var(--e2) var(--e3);
+  background: var(--cor-superficie-2);
+  border-bottom: 1px solid var(--cor-borda-2);
+  text-align: left;
+  font-size: var(--t-xs);
+  font-weight: var(--peso-forte);
+  color: var(--cor-texto-suave);
+  /* Maiúsculas com entreletra: separa o cabeçalho do dado sem precisar de
+     mais uma cor ou de uma régua. */
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.tabela td {
+  padding: var(--e2) var(--e3);
   border-bottom: 1px solid var(--cor-borda);
+  vertical-align: middle;
 }
-.tabela td { padding: var(--e2) var(--e3); border-bottom: 1px solid var(--cor-borda); }
+.tabela tbody tr { transition: background-color var(--rapido) var(--curva); }
 .tabela tbody tr:hover { background: var(--cor-superficie-2); }
-.rolagem { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabela tbody tr:last-child td { border-bottom: none; }
 
-/* --------------------------------------------------------- estados */
-.vazio {
-  padding: var(--e8) var(--e4); text-align: center; color: var(--cor-texto-suave);
+/* ================================================================ SELOS */
+.selo {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px var(--e2); border-radius: var(--raio-cheio);
+  background: var(--cor-superficie-2);
+  border: 1px solid var(--cor-borda-2);
+  color: var(--cor-texto-2);
+  font-size: var(--t-xs); font-weight: var(--peso-forte);
+  line-height: 1.5; white-space: nowrap;
 }
-.vazio__icone { font-size: 2rem; opacity: .5; display: block; margin-bottom: var(--e2); }
+.selo--ok      { background: var(--ok-fundo);      border-color: var(--ok-borda);      color: var(--ok-forte); }
+.selo--atencao { background: var(--atencao-fundo); border-color: var(--atencao-borda); color: var(--atencao-forte); }
+.selo--risco   { background: var(--risco-fundo);   border-color: var(--risco-borda);   color: var(--risco-forte); }
+.selo--info    { background: var(--info-fundo);    border-color: var(--info-borda);    color: var(--info-forte); }
 
+.selo-estoque { font-variant-numeric: tabular-nums; }
+
+/* =============================================================== FAIXAS
+   Alerta de bloco. Barra lateral colorida em vez de fundo saturado: informa
+   a gravidade sem gritar, e o texto continua sobre fundo quase branco. */
 .faixa {
-  display: flex; align-items: center; gap: var(--e2);
-  padding: var(--e2) var(--e3); margin-bottom: var(--e3);
-  border-radius: var(--raio); font-size: .85rem;
-  background: var(--cor-info-fundo); color: var(--cor-info);
+  display: flex; align-items: flex-start; gap: var(--e2);
+  padding: var(--e3) var(--e4);
+  border: 1px solid var(--cor-borda-2);
+  border-left: 3px solid var(--cor-neutro);
+  border-radius: var(--raio-sm);
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-2);
+  font-size: var(--t-sm);
 }
-.faixa--atencao { background: var(--cor-atencao-fundo); color: var(--cor-atencao); }
-.faixa--risco   { background: var(--cor-risco-fundo);   color: var(--cor-risco); }
+.faixa--ok      { background: var(--ok-fundo);      border-color: var(--ok-borda);      border-left-color: var(--ok-base);      color: var(--ok-forte); }
+.faixa--atencao { background: var(--atencao-fundo); border-color: var(--atencao-borda); border-left-color: var(--atencao-base); color: var(--atencao-forte); }
+.faixa--risco   { background: var(--risco-fundo);   border-color: var(--risco-borda);   border-left-color: var(--risco-base);   color: var(--risco-forte); }
+.faixa--info    { background: var(--info-fundo);    border-color: var(--info-borda);    border-left-color: var(--info-base);    color: var(--info-forte); }
 
-.esqueleto {
-  background: linear-gradient(90deg, var(--cor-superficie-2) 25%,
-              var(--cor-borda) 37%, var(--cor-superficie-2) 63%);
-  background-size: 400% 100%;
-  animation: brilho 1.4s ease infinite;
-  border-radius: 4px; height: 14px;
-}
-@keyframes brilho { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
-
-/* --------------------------------------------- indicador de sincronia */
-.sinc {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: .75rem; color: var(--cor-texto-suave); white-space: nowrap;
-}
-.sinc--pendente { color: var(--cor-atencao); font-weight: 600; }
-.sinc--erro { color: var(--cor-risco); font-weight: 600; }
-
-/* -------------------------------------------------------- painel lateral */
+/* ============================================================== PAINEL
+   Gaveta lateral no desktop, folha de baixo no celular — onde o polegar
+   alcança. Entra deslizando para que se entenda de onde ela veio. */
 .painel {
   position: fixed; inset: 0; z-index: 2000;
   display: flex; justify-content: flex-end;
-  background: rgb(0 0 0 / .35);
+  background: rgb(16 24 40 / .40);
+  backdrop-filter: blur(2px);
+  animation: entrar-fundo var(--normal) var(--curva);
 }
 .painel__caixa {
-  width: min(480px, 100%); height: 100%; overflow-y: auto;
-  background: var(--cor-superficie); box-shadow: var(--sombra-alta);
+  width: min(560px, 100%);
+  height: 100%;
   display: flex; flex-direction: column;
+  background: var(--cor-superficie);
+  border-left: 1px solid var(--cor-borda);
+  box-shadow: var(--sombra-alta);
+  animation: entrar-painel var(--lento) var(--curva-saida);
 }
 .painel__cabecalho {
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: flex-start; gap: var(--e2);
-  padding: var(--e4); background: var(--cor-superficie);
+  display: flex; align-items: center; gap: var(--e3);
+  padding: var(--e4) var(--e5);
   border-bottom: 1px solid var(--cor-borda);
+  font-family: var(--fonte-titulo);
+  font-weight: var(--peso-titulo);
+  font-size: var(--t-md);
+  letter-spacing: -0.01em;
 }
-.painel__corpo { padding: var(--e4); flex: 1; }
+.painel__cabecalho .espaco { flex: 1; }
+.painel__corpo { flex: 1; overflow-y: auto; padding: var(--e5); }
 
-/* ------------------------------------------------------------- login */
+@keyframes entrar-fundo  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes entrar-painel { from { transform: translateX(24px); opacity: .4 } to { transform: none; opacity: 1 } }
+
+@media (max-width: 860px) {
+  .painel { align-items: flex-end; justify-content: center; }
+  .painel__caixa {
+    width: 100%; height: min(92vh, 100%);
+    border-left: none; border-top: 1px solid var(--cor-borda);
+    border-radius: var(--raio-xl) var(--raio-xl) 0 0;
+    animation-name: entrar-folha;
+  }
+  .painel__corpo { padding: var(--e4); padding-bottom: calc(var(--e8) + env(safe-area-inset-bottom)); }
+}
+@keyframes entrar-folha { from { transform: translateY(28px); opacity: .5 } to { transform: none; opacity: 1 } }
+
+/* ============================================================== TORRADA
+   Aviso temporário. Sobe do rodapé no celular, canto inferior no desktop. */
+.torrada {
+  position: fixed; z-index: 3000;
+  left: 50%; bottom: calc(var(--e6) + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--e2);
+  max-width: min(440px, calc(100vw - var(--e8)));
+  padding: var(--e3) var(--e4);
+  border: 1px solid var(--cor-borda-2);
+  border-left: 3px solid var(--cor-neutro);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  box-shadow: var(--sombra-alta);
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+  animation: subir-torrada var(--lento) var(--curva-saida);
+}
+.torrada--ok      { border-left-color: var(--ok-base);      color: var(--ok-forte); }
+.torrada--atencao { border-left-color: var(--atencao-base); color: var(--atencao-forte); }
+.torrada--risco   { border-left-color: var(--risco-base);   color: var(--risco-forte); }
+.torrada--info    { border-left-color: var(--info-base);    color: var(--info-forte); }
+@keyframes subir-torrada {
+  from { transform: translate(-50%, 12px); opacity: 0 }
+  to   { transform: translate(-50%, 0); opacity: 1 }
+}
+@media (max-width: 860px) {
+  .torrada { bottom: calc(var(--altura-rodape) + var(--e3) + env(safe-area-inset-bottom)); }
+}
+
+/* ============================================================ ESQUELETO
+   Carregamento com a FORMA do conteúdo que vem, não um rodopio genérico:
+   a tela não "pula" quando o dado chega. */
+.esqueleto {
+  border-radius: var(--raio-sm);
+  background: linear-gradient(100deg,
+    var(--cor-superficie-2) 30%,
+    var(--cor-superficie-3) 50%,
+    var(--cor-superficie-2) 70%);
+  background-size: 220% 100%;
+  animation: brilho 1.4s var(--curva) infinite;
+}
+@keyframes brilho { from { background-position: 180% 0 } to { background-position: -40% 0 } }
+
+/* ================================================================ VAZIO */
+.vazio {
+  display: flex; flex-direction: column; align-items: center;
+  padding: var(--e10) var(--e5);
+  text-align: center; color: var(--cor-texto-suave);
+}
+.vazio__icone {
+  display: grid; place-items: center;
+  width: 52px; height: 52px; margin-bottom: var(--e3);
+  border-radius: var(--raio-lg);
+  background: var(--cor-superficie-2);
+  border: 1px solid var(--cor-borda);
+  font-size: 1.5rem;
+}
+
+/* ========================================================= INDICADORES */
+.sinc {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+  color: var(--cor-texto-suave); white-space: nowrap;
+}
+/* Um ponto colorido no lugar do emoji: mesmo peso e mesmo alinhamento em
+   qualquer sistema, e não muda de desenho entre Windows, Android e iOS. */
+.sinc::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--ok-base);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-base) 18%, transparent);
+}
+.sinc--sincronizando::before {
+  background: var(--info-base);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--info-base) 18%, transparent);
+  animation: pulsar 1.2s ease-in-out infinite;
+}
+.sinc--pendente::before {
+  background: var(--atencao-base);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--atencao-base) 18%, transparent);
+}
+.sinc--erro::before {
+  background: var(--risco-base);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--risco-base) 18%, transparent);
+}
+@keyframes pulsar { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+
+@media (max-width: 860px) { .sinc { font-size: 0; gap: 0; } }  /* só o ponto */
+
+/* =============================================================== LOGIN */
 .login {
-  min-height: 100vh; display: grid; place-items: center; padding: var(--e4);
+  min-height: 100vh;
+  display: grid; place-items: center;
+  padding: var(--e5);
+  /* Brilho da marca no fundo: dá profundidade sem imagem e sem pesar. */
+  background:
+    radial-gradient(60rem 30rem at 50% -10%,
+      color-mix(in srgb, var(--azul-500) 12%, transparent), transparent 70%),
+    var(--cor-fundo);
 }
-.login__caixa { width: min(380px, 100%); }
+.login__caixa { width: min(400px, 100%); }
+
+/* A LOGO de verdade, não um símbolo inventado.
+   O arquivo é o mesmo que vai impresso no pedido — identidade única em tela
+   e em papel. Um desenho aproximado em CSS seria uma segunda marca, parecida
+   mas errada, e marca parecida é pior que marca nenhuma. */
 .login__marca {
-  text-align: center; margin-bottom: var(--e6);
-  font-size: 1.3rem; font-weight: 700; color: var(--cor-primaria);
+  display: flex; flex-direction: column; align-items: center; gap: var(--e4);
+  margin-bottom: var(--e6);
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--cor-texto-suave);
+}
+.login__marca::before {
+  content: '';
+  width: 232px; height: 98px;
+  background: url('../logos/majoaquim.gerada.png') center/contain no-repeat;
+}
+.login .cartao { box-shadow: var(--sombra-media); }
+
+/* No escuro o azul da logo some no fundo. Recolorir uma marca não se faz —
+   então ela ganha uma placa branca, que é como apareceria num papel. */
+@media (prefers-color-scheme: dark) {
+  .login__marca::before {
+    padding: var(--e3) var(--e4);
+    width: 260px; height: 116px;
+    background-color: #fff;
+    background-origin: content-box;
+    border-radius: var(--raio-lg);
+    box-shadow: var(--sombra-media);
+  }
 }
 
-/* --------------------------------------------------------- utilidades */
-.linha { display: flex; align-items: center; gap: var(--e2); }
-.linha--fim { justify-content: flex-end; }
-.entre { display: flex; align-items: center; justify-content: space-between; gap: var(--e2); }
-.suave { color: var(--cor-texto-suave); }
-.pequeno { font-size: .8rem; }
-.minusculo { font-size: .72rem; }
-.forte { font-weight: 650; }
-.quebrar { overflow-wrap: anywhere; }
-.grade { display: grid; gap: var(--e3); }
-@media (min-width: 861px) { .grade--2 { grid-template-columns: 1fr 1fr; } }
+/* ============================================================ UTILIDADES */
+.nao-imprimir { }
+.qtd input { width: 72px; text-align: right; }
 
-/* ---------------------------------------------------------------------
-   Contém o Leaflet num contexto de empilhamento próprio.
-
-   `isolation: isolate` faz os z-index internos dele (medidos em até 1000,
-   o mesmo valor do cabeçalho) serem resolvidos DENTRO desta caixa — nada escapa por cima do cabeçalho
-   ou do painel lateral, mesmo que o Leaflet mude de versão e aumente os
-   próprios valores.
-   --------------------------------------------------------------------- */
-#mapa-tela {
-  position: relative;
-  z-index: 0;
-  isolation: isolate;
-}
+/* Campos numéricos da cotação: sem as setinhas, que roubam largura e são
+   inúteis com teclado numérico no celular. */
+.qtd input::-webkit-outer-spin-button,
+.qtd input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.qtd input { appearance: textfield; -moz-appearance: textfield; }

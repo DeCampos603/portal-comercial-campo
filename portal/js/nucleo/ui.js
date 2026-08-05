@@ -14,16 +14,48 @@ export function comoElemento(html) {
   return molde.content.firstElementChild;
 }
 
+/**
+ * Ícones da navegação — um conjunto só, desenhado com a mesma régua.
+ *
+ * Substituem emoji. Emoji não são um conjunto: 💰 é colorido e cheio, 🗂️ tem
+ * outra proporção, e cada sistema desenha o seu. Lado a lado numa barra de
+ * navegação, nunca alinham nem pesam igual — é o tipo de detalhe que faz uma
+ * interface parecer montada aos pedaços sem que se saiba apontar o motivo.
+ *
+ * Todos com a mesma caixa (24), a mesma espessura (1.75) e `currentColor`,
+ * então herdam a cor do estado da aba sem uma regra a mais.
+ */
+const TRACOS = {
+  cotacoes: '<path d="M7 4h7l5 5v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/>'
+    + '<path d="M13 4v5h5"/><path d="M9.5 13.5h5M9.5 17h3"/>',
+  historico: '<path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h4l1.6 2h7.4A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5Z"/>'
+    + '<path d="M4 11h16"/>',
+  carteira: '<circle cx="9" cy="8.5" r="3"/>'
+    + '<path d="M3.5 19a5.5 5.5 0 0 1 11 0"/>'
+    + '<path d="M16 6.2a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2-4.2"/>',
+  mapa: '<path d="M12 21s6.5-5.7 6.5-10.4A6.5 6.5 0 0 0 5.5 10.6C5.5 15.3 12 21 12 21Z"/>'
+    + '<circle cx="12" cy="10.5" r="2.4"/>',
+  agenda: '<rect x="4" y="5.5" width="16" height="14" rx="1.8"/>'
+    + '<path d="M4 10h16M9 3.5v4M15 3.5v4"/><path d="M8.5 14h3"/>',
+};
+
+/** @param {keyof TRACOS} nome */
+export function icone(nome) {
+  const tracos = TRACOS[nome];
+  if (!tracos) return '';
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+    stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true" focusable="false">${tracos}</svg>`;
+}
+
 /** Aviso temporário no rodapé da tela. */
 export function avisar(mensagem, tipo = 'info', ms = 3200) {
   document.querySelector('.torrada')?.remove();
-  const torrada = comoElemento(`
-    <div class="torrada faixa faixa--${tipo}" role="status" style="
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:calc(var(--altura-rodape) + 16px); z-index:3000;
-      box-shadow:var(--sombra-alta); margin:0; max-width:90vw;">
-      ${esc(mensagem)}
-    </div>`);
+  // Sem estilo inline: posição, animação e cor vivem no CSS. O `transform`
+  // inline que existia aqui vencia o da animação de entrada, e a torrada
+  // aparecia deslocada meia largura para a direita ao ser animada.
+  const torrada = comoElemento(
+    `<div class="torrada torrada--${tipo}" role="status">${esc(mensagem)}</div>`);
   document.body.appendChild(torrada);
   setTimeout(() => torrada.remove(), ms);
 }
