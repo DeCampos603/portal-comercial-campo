@@ -258,29 +258,40 @@ function blocoReposicao() {
   </div>`;
 }
 
+/** Ordem de folheio da carteira: quem compra hoje aparece primeiro. */
+const ORDEM_CARTEIRA = { ativo: 2, recuperacao: 1, inativo: 0 };
+
 function desenharClientes(termo) {
   const caixa = document.getElementById('cot-cliente-resultados');
   if (!caixa) return;
-
-  if (!termo.trim()) {
-    caixa.innerHTML = `<p class="minusculo suave" style="margin:4px 0 0">
-      ${estado.clientes.length} clientes na carteira. Digite para filtrar.</p>`;
-    return;
-  }
 
   if (!indiceClientes || indiceClientes.length !== estado.clientes.length) {
     indiceClientes = criarIndice(estado.clientes, (c) =>
       [c.nome, c.codigo, digitosCNPJ(c.cnpj), c.bairro, c.cidade, c.contato]);
   }
 
-  const achados = buscar(indiceClientes, termo, 12);
+  // Campo vazio lista a carteira em vez de pedir que se digite: os ATIVOS
+  // primeiro, porque são quem se visita. Antes aparecia só a contagem, e era
+  // preciso lembrar o nome do cliente para chegar até ele.
+  const folheando = !termo.trim();
+  const achados = folheando
+    ? [...estado.clientes].sort((a, b) =>
+        (ORDEM_CARTEIRA[b.origem] ?? 0) - (ORDEM_CARTEIRA[a.origem] ?? 0)
+        || String(a.nome).localeCompare(String(b.nome), 'pt-BR')).slice(0, 60)
+    : buscar(indiceClientes, termo, 12);
+
   if (!achados.length) {
     caixa.innerHTML = `<p class="pequeno suave" style="margin:8px 0 0">
-      Nenhum cliente encontrado. Use "+ Novo cliente" para cadastrar.</p>`;
+      ${folheando ? 'Carteira vazia.'
+                  : 'Nenhum cliente encontrado. Use "+ Novo cliente" para cadastrar.'}</p>`;
     return;
   }
 
-  caixa.innerHTML = `<div style="max-height:260px;overflow-y:auto;
+  caixa.innerHTML = `
+    ${folheando ? `<p class="minusculo suave" style="margin:6px 0 4px">
+      Mostrando ${achados.length} de ${estado.clientes.length} clientes —
+      role a lista ou digite para filtrar.</p>` : ''}
+    <div style="max-height:300px;overflow-y:auto;
       border:1px solid var(--cor-borda);border-radius:var(--raio)">
     <table class="tabela"><tbody>
       ${achados.map((c) => `<tr data-cliente="${esc(c.id)}" style="cursor:pointer">
@@ -575,16 +586,25 @@ function guardarCampoPedido() {
 
 // ---------------------------------------------------------- resultados
 
-function desenharResultados() {
+function desenharResultados(folheando = false) {
   const caixa = document.getElementById('cot-resultados');
   if (!caixa) return;
 
   if (!resultadosBusca.length) {
-    caixa.innerHTML = '<p class="pequeno suave" style="margin:8px 0 0">Nenhum item encontrado.</p>';
+    caixa.innerHTML = `<p class="pequeno suave" style="margin:8px 0 0">${
+      folheando ? 'Catálogo vazio.' : 'Nenhum item encontrado.'}</p>`;
     return;
   }
 
-  caixa.innerHTML = `<div class="rolagem" style="max-height:280px;overflow-y:auto;
+  const total = soComEstoque
+    ? estado.catalogo.filter((i) => i.status_estoque !== 'sem_estoque').length
+    : estado.catalogo.length;
+
+  caixa.innerHTML = `
+    ${folheando ? `<p class="minusculo suave" style="margin:8px 0 4px">
+      Mostrando ${resultadosBusca.length} de ${formatarNumero(total)} itens —
+      role a lista ou digite para filtrar.</p>` : ''}
+    <div class="rolagem" style="max-height:340px;overflow-y:auto;
       border:1px solid var(--cor-borda);border-radius:var(--raio)">
     <table class="tabela">
       <tbody>${resultadosBusca.map((item, i) => {
@@ -613,14 +633,27 @@ function desenharResultados() {
   </div>`;
 }
 
+/**
+ * Quantos itens a lista mostra quando NÃO há termo digitado.
+ *
+ * Antes o campo vazio devolvia lista vazia: era preciso saber o que procurar
+ * antes de poder olhar. Numa visita, o representante frequentemente quer
+ * FOLHEAR — "o que vocês têm de guarnição?" — e não buscar um código que já
+ * conhece. Mostrar o catálogo ao focar transforma a busca também em vitrine.
+ *
+ * 80 e não o catálogo inteiro: 521 linhas de uma vez travam a rolagem no
+ * celular e não ajudam ninguém. Quem precisa de mais digita.
+ */
+const LISTA_SEM_TERMO = 80;
+
 function rodarBusca(termo) {
   let base = indice;
   if (soComEstoque) {
     base = indice.filter((i) => i.registro.status_estoque !== 'sem_estoque');
   }
-  resultadosBusca = termo.trim() ? buscar(base, termo, 40) : [];
+  resultadosBusca = buscar(base, termo, termo.trim() ? 40 : LISTA_SEM_TERMO);
   selecionado = 0;
-  desenharResultados();
+  desenharResultados(!termo.trim());
 }
 
 function adicionar(codigo) {
@@ -648,6 +681,9 @@ function ligarEventos(alvo) {
   if (busca) {
     const rodar = comAtraso((v) => rodarBusca(v), 110);
     busca.addEventListener('input', (e) => rodar(e.target.value));
+    // Focar já abre a lista: dá para folhear o catálogo sem saber o que
+    // procurar. Sem atraso aqui — atraso em resposta a um clique parece travamento.
+    busca.addEventListener('focus', () => rodarBusca(busca.value));
     busca.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -683,6 +719,7 @@ function ligarEventos(alvo) {
   if (buscaCliente) {
     const rodar = comAtraso((v) => desenharClientes(v), 120);
     buscaCliente.addEventListener('input', (e) => rodar(e.target.value));
+    buscaCliente.addEventListener('focus', () => desenharClientes(buscaCliente.value));
     desenharClientes(buscaCliente.value);
   }
 
@@ -832,6 +869,7 @@ function montarDocumento() {
   const totais = calcularTotais(linhas);
   const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
   const dadosPedido = { ...pedido.ler(), numero: pedido.numeroAtual(estado.cotacoes) };
+  const validade = validadeCotacao(dadosPedido.validadeDiasUteis ?? 7);
 
   return {
     linhas,
@@ -841,7 +879,8 @@ function montarDocumento() {
       data: hojeISO(),
       vendedor: perfil()?.nome ?? '',
       observacoes,
-      validade: validadeCotacao(dadosPedido.validadeDiasUteis ?? 7).texto,
+      validade: validade.texto,
+      validadeAte: validade.iso,
       empresa: empresa.ler(),
       pedido: dadosPedido,
       cliente,
@@ -920,6 +959,10 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
       pagamento: p.condicoesPagamento || null,
       prazo: p.prazoEntrega || null,
       validade: cotacao.validade,
+      // A DATA, além do texto. O histórico marca a cotação como expirada
+      // comparando com hoje, e extrair data de "7 dias úteis — até 12/08/2026"
+      // por expressão regular quebraria no dia em que o texto mudasse.
+      validadeAte: cotacao.validadeAte,
       frete: p.frete || null,
     },
   };

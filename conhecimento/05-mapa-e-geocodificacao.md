@@ -1,5 +1,32 @@
 # 05 — Mapa e geocodificação
 
+## Base do mapa: CARTO Voyager, não o estilo padrão do OSM
+
+Os dados são os mesmos do OpenStreetMap; o que muda é o **estilo**. O padrão do
+OSM foi desenhado para quem EDITA o mapa: mostra ícone de cada ponto de
+interesse, linha de balsa, uso do solo em cores fortes. Com 378 pinos por cima,
+isso vira ruído — o pino compete com o mapa em vez de se destacar dele.
+
+Medido no mesmo tile do Centro do Rio (z13/3113/4631):
+
+| Base | Bytes | Resposta |
+|---|---|---|
+| OSM padrão | 22,8 KB | 191 ms |
+| CARTO Voyager | 19,9 KB | 9 ms |
+| CARTO Positron | 15,4 KB | 58 ms |
+
+Voyager e não Positron: o Positron é lindo e quase não tem rótulo nesse zoom,
+o que não sustenta roteiro. Voyager mantém a hierarquia de vias legível.
+
+- `{r}` + `detectRetina: true` pede `@2x` só onde a tela aproveita.
+- `dark_all` no tema escuro, trocado ao vivo por `matchMedia`.
+- **Duas atribuições obrigatórias:** OpenStreetMap (dados) e CARTO (estilo).
+- Ao trocar o provedor, atualize também a CSP (`img-src`) em `index.html` **e**
+  a regra de cache de tiles no `sw.js`. Esquecer o `sw.js` quebra o mapa
+  offline em silêncio — justo quando ele mais importa.
+- É serviço gratuito com uso justo. Para esta escala (2 representantes) sobra;
+  se um dia virar produto para muitos usuários, revisar os termos da CARTO.
+
 ## Por que Leaflet + OpenStreetMap
 
 | Opção | Custo | Chave | Veredito |

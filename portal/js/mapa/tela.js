@@ -69,18 +69,58 @@ function destruir() {
   if (mapa) { mapa.remove(); mapa = null; camadaPinos = null; marcadorEu = null; }
 }
 
+/**
+ * Base do mapa — CARTO Voyager, sobre os mesmos dados do OpenStreetMap.
+ *
+ * O estilo padrão do OSM foi desenhado para EDITAR o mapa: mostra ícone de
+ * cada ponto de interesse, linha de balsa, uso do solo em cores fortes. Numa
+ * tela com 378 pinos por cima, isso vira ruído — o pino compete com o mapa
+ * em vez de se destacar dele.
+ *
+ * Voyager mantém a hierarquia de vias legível (que é o que serve para montar
+ * roteiro) e apaga o resto. Medido no mesmo tile do Centro do Rio: 19,9 KB
+ * contra 22,8 KB do OSM, e resposta de 9 ms contra 191 ms.
+ *
+ * `{r}` com `detectRetina` pede a versão @2x só em tela que a aproveita: no
+ * celular do representante o texto do mapa deixa de sair borrado, e no
+ * monitor comum não se paga o dobro de bytes por nada.
+ *
+ * ⚠️ A atribuição do OSM E a da CARTO são exigência de licença das duas.
+ *    Não remover nenhuma das duas.
+ */
+const BASES = {
+  claro: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  escuro: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+};
+const ATRIBUICAO =
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  + ' · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+
+let camadaBase = null;
+
+function urlDaBase() {
+  return matchMedia('(prefers-color-scheme: dark)').matches ? BASES.escuro : BASES.claro;
+}
+
 function criarMapa() {
   mapa = L.map('mapa-tela', {
     center: MAPA_CENTRO,
     zoom: MAPA_ZOOM,
     preferCanvas: true,       // essencial com centenas de pinos
+    zoomControl: true,
   });
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    // Atribuição é exigência da licença do OpenStreetMap. Não remover.
-    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
-    maxZoom: 19,
+  camadaBase = L.tileLayer(urlDaBase(), {
+    attribution: ATRIBUICAO,
+    subdomains: 'abcd',
+    maxZoom: 20,
+    detectRetina: true,
   }).addTo(mapa);
+
+  // Trocar o tema do sistema com o mapa aberto troca a base sem recarregar.
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (camadaBase && mapa) camadaBase.setUrl(urlDaBase());
+  });
 
   camadaPinos = L.layerGroup().addTo(mapa);
 }

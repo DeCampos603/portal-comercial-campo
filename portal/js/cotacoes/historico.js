@@ -15,7 +15,8 @@
 
 import { estado, aoMudar, salvarCotacao, excluirCotacao, recursos } from '../nucleo/dados.js';
 import { esc, vazio, avisar, confirmar, abrirPainel } from '../nucleo/ui.js';
-import { formatarBRL, formatarData, formatarPercentual } from '../nucleo/moeda.js';
+import { formatarBRL, formatarData, formatarPercentual, hojeISO } from '../nucleo/moeda.js';
+import { validadeCotacao } from '../nucleo/diasUteis.js';
 import { criarIndice, buscar } from '../nucleo/busca.js';
 import { gerarPedidoHTML } from './exportar.js';
 import { imprimirHTML } from './impressao.js';
@@ -29,8 +30,38 @@ const SITUACOES = {
   expirada: ['Expirada', 'atencao'],
 };
 
+/** As que o representante escolhe. `expirada` não entra: ela é consequência. */
+const SITUACOES_MANUAIS = ['rascunho', 'enviada', 'aprovada', 'recusada'];
+
 const filtros = { texto: '', situacao: new Set(), periodo: 'todos' };
+const selecionadas = new Set();
 let indice = null;
+
+/**
+ * A situação REAL de hoje.
+ *
+ * 🔒 `expirada` é DERIVADA, nunca gravada. Uma cotação vence sozinha quando
+ *    passa da validade, e isso é uma conta sobre a data — não um fato novo
+ *    para guardar. Gravar exigiria alguém rodando uma tarefa diária, e um
+ *    portal que passou uma semana fechado mostraria cotação vencida como
+ *    ativa até a tarefa rodar.
+ *
+ *    Só vence o que está `enviada`: se o representante marcou aprovada ou
+ *    recusada, houve decisão, e decisão não expira. Rascunho também não —
+ *    é trabalho em andamento, não proposta em pé.
+ *
+ *    A data de referência é a validade guardada na própria cotação. Sem ela
+ *    (cotação anterior a este campo), cai para 7 dias úteis a partir da
+ *    emissão, que é a regra combinada com o usuário.
+ */
+export function situacaoEfetiva(c) {
+  if (c.situacao !== 'enviada') return c.situacao;
+
+  const limite = c.condicoes?.validadeAte
+    ?? validadeCotacao(7, new Date(`${c.data}T12:00:00`)).iso;
+
+  return hojeISO() > limite ? 'expirada' : 'enviada';
+}
 
 // ---------------------------------------------------------------- api
 
@@ -70,8 +101,10 @@ function cotacoesFiltradas() {
     lista = buscar(indice, filtros.texto, 1000);
   }
 
+  // Filtra pela situação EFETIVA: quem marca "expirada" quer ver as vencidas,
+  // e nenhuma delas tem 'expirada' gravado no banco.
   if (filtros.situacao.size) {
-    lista = lista.filter((c) => filtros.situacao.has(c.situacao));
+    lista = lista.filter((c) => filtros.situacao.has(situacaoEfetiva(c)));
   }
   lista = lista.filter(dentroDoPeriodo);
 
@@ -127,6 +160,8 @@ function desenhar(alvo) {
         </div>
       </div>
 
+      ${barraDeSelecao(lista)}
+
       <div class="linha pequeno suave" style="justify-content:space-between">
         <span>${lista.length} cotação(ões)</span>
         <span class="forte">${formatarBRL(total)} somados</span>
@@ -136,10 +171,15 @@ function desenhar(alvo) {
       <div class="cartao"><div class="rolagem">
         <table class="tabela">
           <thead><tr>
+            <th style="width:36px">
+              <input type="checkbox" id="hist-todas"
+                     aria-label="Selecionar todas as cotações visíveis"
+                     ${lista.every((c) => selecionadas.has(c.id)) ? 'checked' : ''}>
+            </th>
             <th>Data</th><th>Nº</th><th>Cliente</th>
             <th style="text-align:right">Itens</th>
             <th style="text-align:right">Total c/ IPI</th>
-            <th>Situação</th><th></th>
+            <th style="width:150px">Situação</th><th></th>
           </tr></thead>
           <tbody>${lista.map(linha).join('')}</tbody>
         </table>
@@ -153,8 +193,32 @@ function desenhar(alvo) {
   ligar(alvo);
 }
 
+/** Barra que só existe quando há seleção — não ocupa espaço à toa. */
+function barraDeSelecao(lista) {
+  const visiveis = lista.filter((c) => selecionadas.has(c.id));
+  if (!visiveis.length) return '';
+
+  const soma = visiveis.reduce((s, c) => s + (c.total_com_ipi_centavos ?? 0), 0);
+  return `
+    <div class="faixa faixa--info linha entre" style="align-items:center">
+      <span><strong>${visiveis.length}</strong> selecionada(s) ·
+        ${formatarBRL(soma)}</span>
+      <span class="linha" style="gap:8px">
+        <button class="btn btn--pequeno" id="hist-lote-pdf">🖨️ Gerar PDFs</button>
+        <button class="btn btn--pequeno btn--risco" id="hist-lote-excluir">🗑️ Excluir</button>
+        <button class="btn btn--pequeno btn--fantasma" id="hist-lote-limpar">Limpar seleção</button>
+      </span>
+    </div>`;
+}
+
 function linha(c) {
+  const efetiva = situacaoEfetiva(c);
+  const venceu = efetiva === 'expirada';
+
   return `<tr data-abrir="${esc(c.id)}" style="cursor:pointer">
+    <td><input type="checkbox" data-sel="${esc(c.id)}"
+               aria-label="Selecionar cotação ${esc(c.numero || '')}"
+               ${selecionadas.has(c.id) ? 'checked' : ''}></td>
     <td class="pequeno">${formatarData(c.data)}</td>
     <td class="pequeno forte">${esc(c.numero || '—')}</td>
     <td>
@@ -163,7 +227,16 @@ function linha(c) {
     </td>
     <td style="text-align:right">${c.quantidade_itens ?? 0}</td>
     <td style="text-align:right" class="forte">${formatarBRL(c.total_com_ipi_centavos)}</td>
-    <td>${selo(c.situacao)}</td>
+    <td>
+      <select class="campo campo--compacto" data-situacao-de="${esc(c.id)}"
+              aria-label="Situação da cotação ${esc(c.numero || '')}">
+        ${SITUACOES_MANUAIS.map((v) => `<option value="${v}"
+          ${c.situacao === v ? 'selected' : ''}>${SITUACOES[v][0]}</option>`).join('')}
+        ${venceu ? '<option value="expirada" selected>Expirada</option>' : ''}
+      </select>
+      ${venceu ? `<div class="minusculo" style="color:var(--cor-atencao);margin-top:2px">
+        venceu — escolha para reativar</div>` : ''}
+    </td>
     <td style="text-align:right;white-space:nowrap">
       <button class="btn btn--pequeno" data-pdf="${esc(c.id)}"
               title="Gerar o PDF como foi enviado">🖨️</button>
@@ -193,14 +266,87 @@ function ligar(alvo) {
     desenhar(alvo);
   });
 
-  // O botão do PDF fica DENTRO da linha clicável: sem o stopPropagation,
-  // um clique nele imprimiria e abriria a ficha ao mesmo tempo.
+  // Tudo que é clicável DENTRO da linha precisa de stopPropagation: sem ele,
+  // marcar a caixa ou trocar a situação abriria a ficha por cima.
   alvo.querySelectorAll('[data-pdf]').forEach((botao) =>
     botao.addEventListener('click', (e) => {
       e.stopPropagation();
       const c = estado.cotacoes.find((x) => x.id === botao.dataset.pdf);
       if (c) gerarPDF(c);
     }));
+
+  alvo.querySelectorAll('[data-sel]').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      if (cb.checked) selecionadas.add(cb.dataset.sel);
+      else selecionadas.delete(cb.dataset.sel);
+      desenhar(alvo);
+    });
+  });
+
+  alvo.querySelector('#hist-todas')?.addEventListener('change', (e) => {
+    // "Todas" é todas as VISÍVEIS no filtro atual, não a base inteira —
+    // marcar 300 cotações escondidas e apagá-las seria o pior tipo de surpresa.
+    for (const c of cotacoesFiltradas()) {
+      if (e.target.checked) selecionadas.add(c.id);
+      else selecionadas.delete(c.id);
+    }
+    desenhar(alvo);
+  });
+
+  alvo.querySelectorAll('[data-situacao-de]').forEach((sel) => {
+    sel.addEventListener('click', (e) => e.stopPropagation());
+    sel.addEventListener('change', async (e) => {
+      const c = estado.cotacoes.find((x) => x.id === sel.dataset.situacaoDe);
+      if (!c) return;
+      try {
+        await salvarCotacao({ ...c, situacao: e.target.value });
+        avisar(`${c.numero || 'Cotação'}: ${SITUACOES[e.target.value][0]}.`, 'ok');
+      } catch (erro) {
+        avisar(`Não consegui atualizar: ${erro.message}`, 'risco');
+        desenhar(alvo);
+      }
+    });
+  });
+
+  alvo.querySelector('#hist-lote-limpar')?.addEventListener('click', () => {
+    selecionadas.clear();
+    desenhar(alvo);
+  });
+
+  alvo.querySelector('#hist-lote-pdf')?.addEventListener('click', () => {
+    gerarPDFsEmLote(cotacoesFiltradas().filter((c) => selecionadas.has(c.id)));
+  });
+
+  alvo.querySelector('#hist-lote-excluir')?.addEventListener('click', async () => {
+    const alvos = cotacoesFiltradas().filter((c) => selecionadas.has(c.id));
+    if (!alvos.length) return;
+    if (!confirmar(`Excluir ${alvos.length} cotação(ões)?\n\n`
+      + alvos.slice(0, 6).map((c) => `• ${c.numero || '—'} ${c.nome_cliente}`).join('\n')
+      + (alvos.length > 6 ? `\n• … e mais ${alvos.length - 6}` : '')
+      + '\n\nIsto some com os registros para toda a equipe e não dá para desfazer.')) return;
+
+    // Uma a uma, contando o que deu certo: se a rede cair no meio, o usuário
+    // precisa saber quantas foram, não receber um "falhou" sobre o lote todo.
+    let apagadas = 0;
+    const falhas = [];
+    for (const c of alvos) {
+      try {
+        await excluirCotacao(c.id);
+        selecionadas.delete(c.id);
+        apagadas++;
+      } catch (erro) {
+        falhas.push(`${c.numero || c.id}: ${erro.message}`);
+      }
+    }
+    desenhar(alvo);
+    if (falhas.length) {
+      console.error('Falhas ao excluir:', falhas);
+      avisar(`${apagadas} excluída(s). ${falhas.length} falhou(aram).`, 'risco', 5000);
+    } else {
+      avisar(`${apagadas} cotação(ões) excluída(s).`, 'info');
+    }
+  });
 
   alvo.querySelectorAll('[data-abrir]').forEach((tr) =>
     tr.addEventListener('click', () => {
@@ -218,10 +364,15 @@ function abrirFicha(c) {
   abrirPainel(`${c.numero || 'Cotação'} — ${c.nome_cliente || ''}`, `
     <div class="grade" style="gap:12px">
       <div class="linha" style="gap:8px;flex-wrap:wrap">
-        ${selo(c.situacao)}
+        ${selo(situacaoEfetiva(c))}
         <span class="selo">${formatarData(c.data)}</span>
         ${c.vendedor ? `<span class="selo">${esc(c.vendedor)}</span>` : ''}
       </div>
+      ${situacaoEfetiva(c) === 'expirada' ? `<div class="faixa faixa--atencao">
+        Venceu em ${formatarData(c.condicoes?.validadeAte
+          ?? validadeCotacao(7, new Date(`${c.data}T12:00:00`)).iso)}.
+        Continua gravada como "enviada" — mudar a situação abaixo reativa.
+      </div>` : ''}
 
       <div class="rolagem">
         <table class="tabela">
@@ -267,8 +418,8 @@ function abrirFicha(c) {
       <div>
         <label class="rotulo" for="hist-situacao">Situação</label>
         <select class="campo" id="hist-situacao">
-          ${Object.entries(SITUACOES).map(([v, [rotulo]]) => `
-            <option value="${v}" ${c.situacao === v ? 'selected' : ''}>${rotulo}</option>`).join('')}
+          ${SITUACOES_MANUAIS.map((v) => `
+            <option value="${v}" ${c.situacao === v ? 'selected' : ''}>${SITUACOES[v][0]}</option>`).join('')}
         </select>
       </div>
 
@@ -391,5 +542,32 @@ async function gerarPDF(c) {
   } catch (erro) {
     console.error('Falha ao regerar o PDF:', erro);
     avisar(`Não consegui gerar o PDF: ${erro.message}`, 'risco');
+  }
+}
+
+/**
+ * Várias cotações num documento só.
+ *
+ * UM `window.print()`, não um por cotação: o navegador enfileira as chamadas
+ * e o representante teria de percorrer N caixas de diálogo de impressão,
+ * cada uma podendo ser cancelada por engano no meio. Num documento único ele
+ * confere tudo antes de mandar, e sai um PDF só para anexar no e-mail.
+ *
+ * A quebra de página entre as folhas vive no CSS de impressão
+ * (`.pedido + .pedido { break-before: page }`), não aqui.
+ */
+async function gerarPDFsEmLote(lista) {
+  if (!lista.length) return;
+  try {
+    const folhas = lista
+      .slice()
+      .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+      .map((c) => gerarPedidoHTML(rehidratar(c)))
+      .join('');
+    await imprimirHTML(folhas);
+    avisar(`${lista.length} pedido(s) no documento.`, 'ok');
+  } catch (erro) {
+    console.error('Falha ao gerar os PDFs em lote:', erro);
+    avisar(`Não consegui gerar: ${erro.message}`, 'risco');
   }
 }

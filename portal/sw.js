@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v11';
+const VERSAO = 'portal-v12';
 
 const CASCA = [
   './',
@@ -81,7 +81,10 @@ self.addEventListener('fetch', (evento) => {
   if (url.hostname.endsWith('.supabase.co')) return;
 
   // Tiles do mapa: cache-first, são imutáveis e pesados.
-  if (url.hostname.endsWith('.tile.openstreetmap.org')) {
+  // O host mudou de tile.openstreetmap.org para basemaps.cartocdn.com quando
+  // a base virou Voyager — sem atualizar aqui, o mapa deixaria de funcionar
+  // offline em silêncio, que é exatamente quando ele mais importa.
+  if (url.hostname.endsWith('.basemaps.cartocdn.com')) {
     evento.respondWith(
       caches.open(`${VERSAO}-tiles`).then(async (cache) => {
         const guardado = await cache.match(request);

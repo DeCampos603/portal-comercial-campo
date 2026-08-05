@@ -46,6 +46,11 @@
   .cartao { border: none !important; box-shadow: none !important; }
   .cartao__corpo { padding: 0 !important; }
 
+  /* Impressão em lote: cada pedido começa numa folha nova. A regra é entre
+     irmãos, então o PRIMEIRO não ganha quebra e não sai uma página em branco
+     na frente do documento. */
+  .pedido + .pedido { break-before: page; }
+
   /* Cabeçalho da tabela repete em toda página — o pedido tem várias folhas */
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }

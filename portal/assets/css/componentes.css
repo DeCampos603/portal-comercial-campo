@@ -257,6 +257,15 @@ select.campo {
 
 textarea.campo { min-height: 76px; resize: vertical; line-height: 1.5; }
 
+/* Campo dentro de célula de tabela: a altura padrão engorda a linha e a
+   tabela deixa de ser densa, que é o ponto dela no desktop. */
+.campo--compacto {
+  min-height: 28px; padding: 2px var(--e2); padding-right: var(--e6);
+  font-size: var(--t-xs);
+  background-position: calc(100% - 13px) 52%, calc(100% - 9px) 52%;
+}
+@media (max-width: 860px) { .campo--compacto { min-height: 36px; font-size: 16px; } }
+
 .rotulo {
   display: block; margin-bottom: 6px;
   font-size: var(--t-xs); font-weight: var(--peso-forte);
