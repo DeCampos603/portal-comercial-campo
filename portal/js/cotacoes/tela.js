@@ -9,7 +9,8 @@
  *    frente do cliente, é o que este módulo evita.
  */
 
-import { estado, aoMudar, salvarCotacao } from '../nucleo/dados.js';
+import { estado, aoMudar, salvarCotacao, recursos } from '../nucleo/dados.js';
+import { imprimirHTML } from './impressao.js';
 import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
 import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
 import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel } from '../nucleo/ui.js';
@@ -26,6 +27,21 @@ const RASCUNHO = 'cotacao_rascunho';
 /** { codigoSigma -> quantidade } */
 let itensDaCotacao = new Map();
 let clienteId = null;
+
+/**
+ * Identidade da cotação que está sendo montada.
+ *
+ * 🔴 Sem isto, salvar e depois gerar o PDF criava DOIS registros do mesmo
+ *    documento no histórico — um por clique. Com o id fixo, o segundo grava
+ *    por cima do primeiro e só promove a situação de rascunho para enviada.
+ *
+ *    Vive no rascunho junto com os itens: recarregar a página no meio do
+ *    trabalho não pode transformar a cotação em uma segunda cotação.
+ *
+ *    Zerado ao limpar e ao "refazer" a partir do histórico — nos dois casos
+ *    o que começa ali é um documento novo, não a edição de um antigo.
+ */
+let cotacaoId = null;
 let observacoes = '';
 let indice = null;
 let indiceClientes = null;
@@ -38,7 +54,8 @@ let soComEstoque = false;
 function salvarRascunho() {
   try {
     localStorage.setItem(RASCUNHO, JSON.stringify({
-      itens: [...itensDaCotacao], clienteId, observacoes, em: new Date().toISOString(),
+      itens: [...itensDaCotacao], clienteId, observacoes, cotacaoId,
+      em: new Date().toISOString(),
     }));
   } catch { /* modo privativo: seguir sem rascunho */ }
 }
@@ -54,10 +71,44 @@ function limparCotacao() {
   itensDaCotacao = new Map();
   clienteId = null;
   observacoes = '';
+  cotacaoId = null;          // o que vier depois é documento novo
   localStorage.removeItem(RASCUNHO);
 }
 
 // ---------------------------------------------------------------- api
+
+/**
+ * Carrega uma cotação salva de volta na tela, para refazer o pedido.
+ *
+ * ⚠️ Traz as QUANTIDADES do histórico, mas os PREÇOS de hoje — é o certo para
+ *    quem vai emitir um pedido novo. Quem quer o documento como foi enviado
+ *    usa "Gerar PDF" no histórico, que sai da fotografia e não passa por aqui.
+ *
+ * @returns {{carregados: number, ausentes: string[]}} item que saiu do
+ *   catálogo não pode ser cotado — some da lista, e o chamador avisa quais.
+ */
+export function carregarNaCotacao(cotacaoSalva) {
+  const noCatalogo = new Set(estado.catalogo.map((i) => i.codigo_sigma));
+  const ausentes = [];
+
+  itensDaCotacao = new Map();
+  for (const item of cotacaoSalva.itens ?? []) {
+    if (noCatalogo.has(item.codigo_sigma)) {
+      itensDaCotacao.set(item.codigo_sigma, item.quantidade);
+    } else {
+      ausentes.push(item.codigo_sigma);
+    }
+  }
+
+  clienteId = cotacaoSalva.cliente_id ?? null;
+  observacoes = cotacaoSalva.observacoes ?? '';
+  // Documento NOVO, não edição do antigo: a cotação de origem continua no
+  // histórico exatamente como foi enviada.
+  cotacaoId = null;
+  salvarRascunho();
+
+  return { carregados: itensDaCotacao.size, ausentes };
+}
 
 export function montarCotacoes(alvo) {
   const rascunho = lerRascunho();
@@ -68,6 +119,7 @@ export function montarCotacoes(alvo) {
     // que é justamente o que ajuda a remontar o pedido.
     if (clienteId === null && rascunho.clienteId) clienteId = rascunho.clienteId;
     if (!observacoes && rascunho.observacoes) observacoes = rascunho.observacoes;
+    if (cotacaoId === null && rascunho.cotacaoId) cotacaoId = rascunho.cotacaoId;
 
     if (rascunho.itens?.length && itensDaCotacao.size === 0) {
       itensDaCotacao = new Map(rascunho.itens);
@@ -374,10 +426,12 @@ function blocoLinhas(linhas, totais) {
                   ${formatarBRL(totais.totalComIpi)}</td></tr>
           </table>
           <div class="linha linha--fim" style="margin-top:12px;gap:8px">
-            <button class="btn" id="cot-imprimir">🖨️ PDF do cliente</button>
+            <button class="btn" id="cot-salvar">💾 Salvar cotação</button>
+            <button class="btn btn--primario" id="cot-imprimir">🖨️ PDF do cliente</button>
           </div>
           <p class="minusculo suave" style="margin:8px 0 0;text-align:right">
-            O PDF não contém saldo, comissão nem categoria.
+            Gerar o PDF já salva no histórico. O PDF não contém saldo,
+            comissão nem categoria.
           </p>
         </div>
       </div>
@@ -724,6 +778,13 @@ function ligarEventos(alvo) {
       avisar(`Não consegui gerar o PDF: ${erro.message}`, 'risco');
     });
   });
+
+  alvo.querySelector('#cot-salvar')?.addEventListener('click', () => {
+    salvar().catch((erro) => {
+      console.error('Falha ao salvar a cotação:', erro);
+      avisar(`Não consegui salvar: ${erro.message}`, 'risco');
+    });
+  });
   alvo.querySelector('#cot-empresa')?.addEventListener('click', abrirDadosEmpresa);
 
   // Grava a cada digitação: o representante não deveria ter de "salvar" isto.
@@ -759,51 +820,141 @@ function ligarEventos(alvo) {
  *    Reordenar o código não resolvia: só tirava a corrida de lugar. Fora do
  *    container redesenhado, o problema deixa de existir por construção.
  */
-function areaImpressao() {
-  let area = document.getElementById('area-impressao');
-  if (!area) {
-    area = document.createElement('div');
-    area.id = 'area-impressao';
-    area.className = 'impressao-so';
-    document.body.appendChild(area);
-  }
-  return area;
+/**
+ * Junta tudo que o documento precisa: o que está na tela AGORA.
+ *
+ * Uma função só para as duas saídas — salvar e imprimir — porque cotação
+ * salva e cotação impressa têm de ser o mesmo documento. Montar cada uma no
+ * seu lugar deixaria as duas divergirem em silêncio na primeira alteração.
+ */
+function montarDocumento() {
+  const linhas = montarLinhas();
+  const totais = calcularTotais(linhas);
+  const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
+  const dadosPedido = { ...pedido.ler(), numero: pedido.numeroAtual(estado.cotacoes) };
+
+  return {
+    linhas,
+    totais,
+    cliente,
+    cotacao: {
+      data: hojeISO(),
+      vendedor: perfil()?.nome ?? '',
+      observacoes,
+      validade: validadeCotacao(dadosPedido.validadeDiasUteis ?? 7).texto,
+      empresa: empresa.ler(),
+      pedido: dadosPedido,
+      cliente,
+      linhas,
+      totais,
+    },
+  };
 }
 
 /**
- * Espera as imagens da folha ficarem prontas.
+ * O registro que vai para o banco.
  *
- * 🔴 `window.print()` fotografa a página no instante em que é chamado. Medido
- *    no navegador: no tick em que o innerHTML é atribuído, as logos estão em
- *    `complete=false, naturalWidth=0`; no tick seguinte, `complete=true,
- *    naturalWidth=300`. Ser base64 evita a ida à rede, mas NÃO evita a
- *    decodificação — e ela não é síncrona.
- *
- *    Sem esta espera, o PDF saía com o texto inteiro e NENHUMA imagem: zero
- *    `/Subtype /Image` no arquivo. E o defeito era invisível em teste, porque
- *    qualquer verificação feita um instante depois já encontra tudo pronto.
- *
- *    O tempo limite existe para que uma imagem quebrada nunca impeça a emissão
- *    do pedido: melhor sair sem logo do que não sair.
+ * Guarda a FOTOGRAFIA do documento inteiro — itens, cliente e representação —
+ * e não referências. O preço muda toda semana, o cadastro do cliente é
+ * corrigido, a I.E. da representação é preenchida depois. Um PDF regerado a
+ * partir de referências sairia diferente do que o cliente tem na mão.
  */
-function esperarImagens(raiz, limiteMs = 3000) {
-  const pendentes = [...raiz.querySelectorAll('img')].filter((img) => !img.complete);
-  if (!pendentes.length) return Promise.resolve();
+function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
+  const p = cotacao.pedido;
 
-  return Promise.race([
-    Promise.all(pendentes.map((img) => new Promise((pronto) => {
-      img.addEventListener('load', pronto, { once: true });
-      img.addEventListener('error', pronto, { once: true });
-    }))),
-    new Promise((pronto) => { setTimeout(pronto, limiteMs); }),
-  ]);
+  // O id nasce no primeiro salvamento e não muda mais. É o que faz "salvar" e
+  // depois "gerar PDF" atualizarem o MESMO registro em vez de criar dois.
+  cotacaoId ??= `cot_${hojeISO().replace(/-/g, '')}_${cliente.codigo}`
+              + `_${Date.now().toString(36)}`;
+  salvarRascunho();
+
+  return {
+    id: cotacaoId,
+    equipe_id: perfil()?.equipe_id,
+    representante_id: perfil()?.id,
+    cliente_id: cliente.id,
+    nome_cliente: cliente.nome,
+    vendedor: cotacao.vendedor || null,
+    numero: p.numero || null,
+    data: cotacao.data,
+    situacao,
+    total_produtos_centavos: totais.totalProdutos,
+    total_ipi_centavos: totais.totalIpi,
+    total_com_ipi_centavos: totais.totalComIpi,
+    quantidade_itens: totais.quantidadeItens,
+
+    // `codigo_fabricante` e `st` entram aqui porque o PDF os imprime. Sem
+    // eles, o documento regerado sairia com colunas vazias.
+    itens: linhas.map(({ item, calculo }) => ({
+      codigo_sigma: item.codigo_sigma,
+      codigo_fabricante: item.codigo_fabricante ?? null,
+      descricao: item.descricao,
+      st: !!item.st,
+      quantidade: calculo.qtd,
+      valor_unitario_centavos: item.valor_unitario_centavos,
+      ipi: item.ipi,
+      valor_produtos_centavos: calculo.valorProdutos,
+      valor_com_ipi_centavos: calculo.valorComIpi,
+    })),
+
+    // 🔒 Só o que o PDF imprime. Saldo, origem e situação comercial são dados
+    //    internos e não entram nem no papel nem nesta fotografia.
+    cliente: {
+      nome: cliente.nome,
+      codigo: cliente.codigo,
+      cnpj: cliente.cnpj ?? null,
+      inscricao_estadual: cliente.inscricao_estadual ?? null,
+      logradouro: cliente.logradouro ?? null,
+      bairro: cliente.bairro ?? null,
+      cidade: cliente.cidade ?? null,
+      uf: cliente.uf ?? null,
+      cep: cliente.cep ?? null,
+      contato: cliente.contato ?? null,
+      telefone: cliente.telefone ?? null,
+      email: cliente.email ?? null,
+    },
+    empresa: cotacao.empresa,
+
+    observacoes: cotacao.observacoes || null,
+    condicoes: {
+      pagamento: p.condicoesPagamento || null,
+      prazo: p.prazoEntrega || null,
+      validade: cotacao.validade,
+      frete: p.frete || null,
+    },
+  };
+}
+
+/** Salvar sem imprimir: arquiva a cotação e segue a vida. */
+async function salvar() {
+  const documento = montarDocumento();
+  if (!documento.linhas.length) {
+    avisar('A cotação está vazia.', 'atencao');
+    return;
+  }
+  if (!documento.cliente) {
+    avisar('Escolha o cliente antes de salvar — o histórico é por cliente.', 'atencao');
+    return;
+  }
+  if (!recursos.cotacoes) {
+    avisar('Histórico indisponível: rode a migração 03 no Supabase.', 'risco');
+    return;
+  }
+
+  guardarCampoPedido();
+
+  // 'rascunho', não 'enviada': salvar é guardar o trabalho, não mandar ao
+  // cliente. Quem manda é o PDF, e é ele que promove a situação.
+  const registro = montarRegistro(documento, 'rascunho');
+  await salvarCotacao(registro);
+  avisar(`Cotação ${registro.numero || ''} salva como rascunho.`, 'ok');
 }
 
 async function imprimir(alvo) {
-  const linhas = montarLinhas();
-  if (!linhas.length) { avisar('A cotação está vazia.', 'atencao'); return; }
+  const documento = montarDocumento();
+  if (!documento.linhas.length) { avisar('A cotação está vazia.', 'atencao'); return; }
 
-  const totais = calcularTotais(linhas);
+  const { totais, cliente, cotacao } = documento;
   if (totais.itensSemEstoque &&
       !confirmar(`Esta cotação tem ${totais.itensSemEstoque} item(ns) SEM ESTOQUE.\n\nGerar o PDF assim mesmo?`)) {
     return;
@@ -811,67 +962,17 @@ async function imprimir(alvo) {
 
   guardarCampoPedido();
 
-  const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
-  const dadosPedido = { ...pedido.ler(), numero: pedido.numeroAtual(estado.cotacoes) };
-  const cotacao = {
-    data: hojeISO(),
-    vendedor: perfil()?.nome ?? '',
-    observacoes,
-    validade: validadeCotacao(dadosPedido.validadeDiasUteis ?? 7).texto,
-    empresa: empresa.ler(),
-    pedido: dadosPedido,
-    cliente, linhas, totais,
-  };
-
   // 🔒 Sanitiza ANTES de gerar o HTML: o dado interno nunca entra na página.
-  const limpa = sanitizarParaCliente(cotacao);
-  const area = areaImpressao();
-  area.innerHTML = gerarPedidoHTML(limpa);
-
-  await esperarImagens(area);
-  window.print();
+  await imprimirHTML(gerarPedidoHTML(sanitizarParaCliente(cotacao)));
 
   // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
   pedido.avancarNumero();
   const campoNumero = document.getElementById('ped-numero');
   if (campoNumero) campoNumero.value = pedido.ler().numero;
 
-  // Registra no histórico do cliente DEPOIS de imprimir: gerar o PDF é o que o
-  // representante veio fazer, e uma falha ao arquivar não pode impedir isso.
-  // Os itens vão como fotografia do momento — o preço muda toda semana, o
-  // histórico não pode mudar junto.
-  if (cliente) {
-    const dados = dadosPedido;
-    await salvarCotacao({
-      id: `cot_${hojeISO().replace(/-/g, '')}_${cliente.codigo}_${Date.now().toString(36)}`,
-      equipe_id: perfil()?.equipe_id,
-      representante_id: perfil()?.id,
-      cliente_id: cliente.id,
-      nome_cliente: cliente.nome,
-      numero: dados.numero || null,
-      data: hojeISO(),
-      situacao: 'enviada',
-      total_produtos_centavos: totais.totalProdutos,
-      total_ipi_centavos: totais.totalIpi,
-      total_com_ipi_centavos: totais.totalComIpi,
-      quantidade_itens: totais.quantidadeItens,
-      itens: linhas.map(({ item, calculo }) => ({
-        codigo_sigma: item.codigo_sigma,
-        descricao: item.descricao,
-        quantidade: calculo.qtd,
-        valor_unitario_centavos: item.valor_unitario_centavos,
-        ipi: item.ipi,
-        valor_com_ipi_centavos: calculo.valorComIpi,
-      })),
-      observacoes: observacoes || null,
-      condicoes: {
-        pagamento: dados.condicoesPagamento || null,
-        prazo: dados.prazoEntrega || null,
-        validade: cotacao.validade,
-        frete: dados.frete || null,
-      },
-    });
-  }
+  // Arquiva DEPOIS de imprimir: gerar o PDF é o que o representante veio
+  // fazer, e uma falha ao arquivar não pode impedir isso.
+  if (cliente) await salvarCotacao(montarRegistro(documento, 'enviada'));
 }
 
 // Atalho global: "/" foca a busca de qualquer lugar da tela de cotações.

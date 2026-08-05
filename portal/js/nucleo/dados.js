@@ -39,7 +39,7 @@ const COLUNAS_CLIENTE_BASE =
 const COLUNAS_CLIENTE = `${COLUNAS_CLIENTE_BASE}, cnpj, inscricao_estadual`;
 
 /** Sinaliza à interface o que o banco ainda não tem. */
-export const recursos = { cnpj: true, cotacoes: true };
+export const recursos = { cnpj: true, cotacoes: true, fotografiaCotacao: true };
 
 /**
  * Busca todas as linhas de uma tabela, paginando.
@@ -80,16 +80,36 @@ async function buscarClientes() {
 }
 
 /** Cotações. Tabela nova: se não existir, segue sem histórico. */
+const COLUNAS_COTACAO_BASE =
+  'id, cliente_id, representante_id, numero, nome_cliente, data, situacao, '
+  + 'total_produtos_centavos, total_ipi_centavos, total_com_ipi_centavos, '
+  + 'quantidade_itens, itens, observacoes, condicoes, atualizado_em';
+
+// `vendedor`, `cliente` e `empresa` vieram na migração 05. Como em clientes,
+// o PostgREST recusa a consulta INTEIRA se uma coluna não existe — por isso
+// existe a versão sem elas. Sem o plano B, quem não rodou a migração perderia
+// o histórico todo em vez de perder só a fotografia do cabeçalho.
+const COLUNAS_COTACAO = `${COLUNAS_COTACAO_BASE}, vendedor, cliente, empresa`;
+
 async function buscarCotacoes() {
   try {
-    const dados = await buscarTudo('cotacoes',
-      'id, cliente_id, representante_id, numero, nome_cliente, data, situacao, '
-      + 'total_produtos_centavos, total_ipi_centavos, total_com_ipi_centavos, '
-      + 'quantidade_itens, itens, observacoes, condicoes, atualizado_em', 'data');
+    const dados = await buscarTudo('cotacoes', COLUNAS_COTACAO, 'data');
     recursos.cotacoes = true;
+    recursos.fotografiaCotacao = true;
     return dados;
   } catch (erro) {
-    if (!/does not exist|relation|schema cache/i.test(erro.message || '')) throw erro;
+    const mensagem = erro.message || '';
+
+    if (/column .* does not exist|vendedor|cliente|empresa/i.test(mensagem)) {
+      recursos.cotacoes = true;
+      recursos.fotografiaCotacao = false;
+      console.warn('Colunas de fotografia ausentes — rode '
+        + 'modelos/supabase/05-historico-cotacoes.sql. O histórico funciona, '
+        + 'mas o PDF regerado usa o cadastro atual do cliente.');
+      return buscarTudo('cotacoes', COLUNAS_COTACAO_BASE, 'data');
+    }
+
+    if (!/does not exist|relation|schema cache/i.test(mensagem)) throw erro;
     recursos.cotacoes = false;
     console.warn('Tabela cotacoes ausente — rode modelos/supabase/03-cnpj-e-cotacoes.sql');
     return [];
@@ -220,6 +240,29 @@ export async function salvarCotacao(cotacao) {
 
   sincronizarFila();
   return registro;
+}
+
+/**
+ * Apaga uma cotação do histórico.
+ *
+ * Vai direto ao servidor em vez de passar pela fila: excluir é raro e
+ * intencional, e uma exclusão que fica pendente na fila reapareceria na tela
+ * como se ainda existisse. Se falhar, o registro volta para a lista — melhor
+ * mostrar que continua lá do que fingir que sumiu.
+ */
+export async function excluirCotacao(id) {
+  const antes = estado.cotacoes;
+  estado.cotacoes = estado.cotacoes.filter((c) => c.id !== id);
+  await guardar('cotacoes', estado.cotacoes);
+  avisar();
+
+  const { error } = await sb.from('cotacoes').delete().eq('id', id);
+  if (error) {
+    estado.cotacoes = antes;
+    await guardar('cotacoes', estado.cotacoes);
+    avisar();
+    throw error;
+  }
 }
 
 /** Cotações de um cliente, da mais recente para a mais antiga. */

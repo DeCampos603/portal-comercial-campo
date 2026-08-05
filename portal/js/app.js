@@ -11,15 +11,17 @@ import { formatarDataHora, diasDesde } from './nucleo/moeda.js';
 import { DIAS_ATE_TABELA_VELHA } from './config.js';
 
 import { montarCotacoes } from './cotacoes/tela.js';
+import { montarHistorico } from './cotacoes/historico.js';
 import { montarCarteira } from './carteira/tela.js';
 import { montarMapa } from './mapa/tela.js';
 import { montarAgenda } from './agenda/tela.js';
 
 const SECOES = [
-  { hash: '#/cotacoes', rotulo: 'Cotações', icone: '💰', montar: montarCotacoes },
-  { hash: '#/carteira', rotulo: 'Carteira', icone: '👥', montar: montarCarteira },
-  { hash: '#/mapa',     rotulo: 'Mapa',     icone: '🗺️', montar: montarMapa },
-  { hash: '#/agenda',   rotulo: 'Agenda',   icone: '📅', montar: montarAgenda },
+  { hash: '#/cotacoes',  rotulo: 'Cotações',  icone: '💰', montar: montarCotacoes },
+  { hash: '#/historico', rotulo: 'Histórico', icone: '🗂️', montar: montarHistorico },
+  { hash: '#/carteira',  rotulo: 'Carteira',  icone: '👥', montar: montarCarteira },
+  { hash: '#/mapa',      rotulo: 'Mapa',      icone: '🗺️', montar: montarMapa },
+  { hash: '#/agenda',    rotulo: 'Agenda',    icone: '📅', montar: montarAgenda },
 ];
 
 const el = (id) => document.getElementById(id);

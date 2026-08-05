@@ -15,6 +15,11 @@ portal único, rápido e confiável, com quatro módulos:
 1. **Cotações** — monta o pedido no mesmo modelo do Excel da Sigma, mas com busca
    instantânea, IPI calculado na hora, semáforo de estoque à vista e exportação de
    PDF limpo para o cliente.
+1b. **Histórico** — as cotações salvas, com o PDF regerável a qualquer momento.
+   🔒 **Regra que não se quebra:** *gerar PDF* sai da **fotografia** guardada no
+   banco; *refazer cotação* sai do **catálogo de hoje**. O documento regerado
+   tem de ser o que o cliente recebeu, ainda que a tabela tenha mudado desde
+   então; já refazer serve para emitir pedido novo, e aí o preço certo é o atual.
 2. **Carteira** — os clientes navegáveis, filtráveis e pesquisáveis, com status
    comercial, classificação (ativo / recuperação / inativo) e histórico de contato.
 3. **Mapa** — todos os clientes plotados no mapa do Rio, para enxergar quem está perto
