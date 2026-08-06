@@ -25,6 +25,23 @@
         aviso temporário ..... 3000
    --------------------------------------------------------------------- */
 
+/* 🔴 O mapa vive numa CAIXA FECHADA de empilhamento.
+      O Leaflet chega a z-index 1000 internamente (medido: panes 400-700,
+      controles 800, container de controles 1000) — o mesmo valor do
+      cabeçalho. Em empate, quem vence é quem vem depois no DOM, e o mapa vem
+      depois: sem isto ele passava POR CIMA do cabeçalho ao rolar e por cima
+      da ficha do cliente.
+      `isolation: isolate` cria um contexto novo, então o 1000 de dentro do
+      mapa passa a valer só dentro dele e nunca disputa com a interface.
+      ⚠️ Esta regra já se perdeu uma vez, numa reescrita do CSS. Se o mapa
+         voltar a cobrir algo, é aqui que se olha primeiro. */
+#mapa-tela {
+  isolation: isolate;
+  position: relative;
+  z-index: 0;
+  overflow: hidden;              /* respeita o border-radius do cartão */
+}
+
 .cabecalho {
   position: sticky; top: 0; z-index: 1000;
   display: flex; align-items: center; gap: var(--e3);

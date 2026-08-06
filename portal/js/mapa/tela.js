@@ -88,19 +88,24 @@ function destruir() {
  * ⚠️ A atribuição do OSM E a da CARTO são exigência de licença das duas.
  *    Não remover nenhuma das duas.
  */
-const BASES = {
-  claro: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  escuro: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-};
+/**
+ * 🔴 SEMPRE a base clara, mesmo com o portal em tema escuro.
+ *
+ *    A primeira versão seguia `prefers-color-scheme` e trocava para a base
+ *    escura junto com a interface. Parecia coerente e era pior de usar: no
+ *    mapa escuro as vias somem no fundo e os nomes de bairro ficam ilegíveis
+ *    à luz do dia, que é quando se monta roteiro.
+ *
+ *    O mapa não é parte da moldura da interface — é o DOCUMENTO que está
+ *    sendo lido. Um documento se imprime em papel branco independente da cor
+ *    da mesa. Legibilidade ganha de harmonia cromática aqui.
+ */
+const BASE_CLARA =
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
 const ATRIBUICAO =
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
   + ' · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
-
-let camadaBase = null;
-
-function urlDaBase() {
-  return matchMedia('(prefers-color-scheme: dark)').matches ? BASES.escuro : BASES.claro;
-}
 
 function criarMapa() {
   mapa = L.map('mapa-tela', {
@@ -110,17 +115,12 @@ function criarMapa() {
     zoomControl: true,
   });
 
-  camadaBase = L.tileLayer(urlDaBase(), {
+  L.tileLayer(BASE_CLARA, {
     attribution: ATRIBUICAO,
     subdomains: 'abcd',
     maxZoom: 20,
     detectRetina: true,
   }).addTo(mapa);
-
-  // Trocar o tema do sistema com o mapa aberto troca a base sem recarregar.
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if (camadaBase && mapa) camadaBase.setUrl(urlDaBase());
-  });
 
   camadaPinos = L.layerGroup().addTo(mapa);
 }
