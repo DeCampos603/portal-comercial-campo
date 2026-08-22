@@ -16,6 +16,7 @@ import { montarHistorico } from './cotacoes/historico.js';
 import { montarCarteira } from './carteira/tela.js';
 import { montarMapa } from './mapa/tela.js';
 import { montarAgenda } from './agenda/tela.js';
+import { montarDisparador } from './disparador/tela.js';
 
 const SECOES = [
   { hash: '#/cotacoes',  rotulo: 'Cotações',  icone: 'cotacoes',  montar: montarCotacoes },
@@ -23,6 +24,7 @@ const SECOES = [
   { hash: '#/carteira',  rotulo: 'Carteira',  icone: 'carteira',  montar: montarCarteira },
   { hash: '#/mapa',      rotulo: 'Mapa',      icone: 'mapa',      montar: montarMapa },
   { hash: '#/agenda',    rotulo: 'Agenda',    icone: 'agenda',    montar: montarAgenda },
+  { hash: '#/disparador',rotulo: 'Disparos',  icone: 'email',     montar: montarDisparador },
 ];
 
 const el = (id) => document.getElementById(id);

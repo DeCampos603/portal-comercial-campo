@@ -97,13 +97,13 @@
   --fonte-titulo: 'Segoe UI Variable Display', var(--fonte);
   --fonte-numero: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
 
-  --t-xs:   0.75rem;    /* 12px — legenda, selo */
-  --t-sm:   0.8125rem;  /* 13px — apoio, tabela densa */
-  --t-base: 0.9375rem;  /* 15px — corpo */
-  --t-md:   1rem;       /* 16px */
-  --t-lg:   1.125rem;   /* 18px */
-  --t-xl:   1.375rem;   /* 22px */
-  --t-2xl:  1.75rem;    /* 28px */
+  --t-xs:   clamp(0.75rem, 0.70rem + 0.25vw, 0.8125rem); /* 12px -> 13px */
+  --t-sm:   clamp(0.8125rem, 0.78rem + 0.16vw, 0.875rem); /* 13px -> 14px */
+  --t-base: clamp(0.9375rem, 0.90rem + 0.19vw, 1rem); /* 15px -> 16px */
+  --t-md:   clamp(1rem, 0.95rem + 0.25vw, 1.0625rem); /* 16px -> 17px */
+  --t-lg:   clamp(1.125rem, 1.05rem + 0.38vw, 1.25rem); /* 18px -> 20px */
+  --t-xl:   clamp(1.375rem, 1.25rem + 0.63vw, 1.5rem); /* 22px -> 24px */
+  --t-2xl:  clamp(1.75rem, 1.60rem + 0.75vw, 2rem); /* 28px -> 32px */
 
   --peso-normal: 400;
   --peso-medio: 500;
@@ -125,14 +125,10 @@
   /* Sombra em duas camadas: um contorno de 1px que assenta o elemento no
      fundo, e uma difusa que dá altura. Uma sombra só, forte, envelhece a
      interface — o efeito "caixa flutuante" dos anos 2010. */
-  --sombra-sutil: 0 1px 2px rgb(16 24 40 / .04),
-                  0 0 0 1px rgb(16 24 40 / .04);
-  --sombra: 0 1px 2px rgb(16 24 40 / .05),
-            0 2px 6px -1px rgb(16 24 40 / .06);
-  --sombra-media: 0 2px 4px -1px rgb(16 24 40 / .06),
-                  0 8px 16px -4px rgb(16 24 40 / .10);
-  --sombra-alta: 0 4px 8px -2px rgb(16 24 40 / .08),
-                 0 20px 32px -8px rgb(16 24 40 / .16);
+  --sombra-sutil: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
+  --sombra: 0 4px 6px -1px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --sombra-media: 0 10px 15px -3px rgba(16, 24, 40, 0.08), 0 4px 6px -4px rgba(16, 24, 40, 0.03);
+  --sombra-alta: 0 20px 25px -5px rgba(16, 24, 40, 0.10), 0 8px 10px -6px rgba(16, 24, 40, 0.04);
   --anel-foco: 0 0 0 3px rgb(18 124 206 / .28);
 
   /* ------------------------------------------------------------ tempo
@@ -141,8 +137,13 @@
   --rapido: 150ms;
   --normal: 200ms;
   --lento: 300ms;
-  --curva: cubic-bezier(.4, 0, .2, 1);
-  --curva-saida: cubic-bezier(.16, 1, .3, 1);
+  --curva: cubic-bezier(0.16, 1, 0.3, 1);
+  --curva-saida: cubic-bezier(0.7, 0, 0.84, 0);
+  
+  /* Curvas avançadas para micro-interações fluidas */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
   --altura-cabecalho: 56px;
   --altura-rodape: 62px;
@@ -190,10 +191,10 @@
     --info-forte: #7CBBEC;    --info-base: #1A7BC4;
     --info-borda: #1C3348;    --info-fundo: #12212E;
 
-    --sombra-sutil: 0 1px 2px rgb(0 0 0 / .4), 0 0 0 1px rgb(255 255 255 / .04);
-    --sombra: 0 1px 2px rgb(0 0 0 / .5), 0 2px 6px -1px rgb(0 0 0 / .4);
-    --sombra-media: 0 2px 4px -1px rgb(0 0 0 / .5), 0 8px 16px -4px rgb(0 0 0 / .5);
-    --sombra-alta: 0 4px 8px -2px rgb(0 0 0 / .5), 0 20px 32px -8px rgb(0 0 0 / .6);
+    --sombra-sutil: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --sombra: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --sombra-media: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+    --sombra-alta: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
     --anel-foco: 0 0 0 3px rgb(73 163 233 / .35);
   }
 }

@@ -161,36 +161,69 @@
   --btn-texto: var(--cor-texto);
   --btn-borda: var(--cor-borda-2);
 
+  position: relative;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 38px; padding: 0 var(--e3);
+  min-height: 48px; padding: 0 var(--e6);
   border: 1px solid var(--btn-borda);
   border-radius: var(--raio-sm);
   background: var(--btn-fundo);
   color: var(--btn-texto);
   font-size: var(--t-sm); font-weight: var(--peso-forte);
   line-height: 1;
-  white-space: nowrap; cursor: pointer;
-  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
-  transition: background-color var(--rapido) var(--curva),
-              border-color var(--rapido) var(--curva),
-              box-shadow var(--rapido) var(--curva),
-              transform var(--rapido) var(--curva);
+  white-space: nowrap; cursor: pointer; user-select: none;
+  box-shadow: var(--sombra-sutil);
+  transition: background-color var(--rapido) var(--ease-out-expo),
+              border-color var(--rapido) var(--ease-out-expo),
+              transform var(--rapido) var(--ease-spring),
+              color var(--rapido) var(--ease-out-expo);
 }
-.btn:hover { background: var(--cor-superficie-2); border-color: var(--cor-borda-forte); }
-.btn:active { transform: translateY(.5px); box-shadow: none; }
-.btn:focus-visible { outline: 2px solid var(--cor-foco); outline-offset: 2px; }
+
+.btn::after {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: inherit;
+  box-shadow: var(--sombra-media);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--rapido) var(--ease-out-expo);
+}
+
+.btn:hover { 
+  background: var(--cor-superficie-2); 
+  border-color: var(--cor-borda-forte); 
+  transform: translateY(-2px); 
+}
+.btn:hover::after { opacity: 1; }
+
+.btn:active { 
+  transform: translateY(0) scale(0.97); 
+}
+.btn:active::after { opacity: 0; }
+
+.btn:focus-visible { 
+  outline: 2px solid var(--cor-foco); 
+  outline-offset: 4px;
+  transition: outline-offset var(--rapido) var(--ease-spring);
+}
+
 .btn:disabled, .btn[aria-disabled='true'] {
   cursor: not-allowed; opacity: .55; box-shadow: none;
   background: var(--cor-superficie-2); color: var(--cor-texto-desabilitado);
+  transform: none; pointer-events: none;
 }
-.btn:disabled:hover { border-color: var(--cor-borda-2); }
+.btn:disabled::after, .btn[aria-disabled='true']::after {
+  display: none;
+}
+.btn[aria-busy="true"] {
+  pointer-events: none;
+  color: transparent !important;
+}
 
 .btn--primario {
   --btn-fundo: var(--cor-primaria);
   --btn-texto: #fff;
   --btn-borda: var(--cor-primaria);
-  box-shadow: 0 1px 2px rgb(4 63 108 / .24),
-              inset 0 1px 0 rgb(255 255 255 / .10);
+  box-shadow: var(--sombra-sutil);
 }
 .btn--primario:hover {
   background: var(--cor-primaria-forte); border-color: var(--cor-primaria-forte);
@@ -228,18 +261,30 @@
 }
 
 /* ================================================================ CAMPOS */
+.grupo-campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1);
+  position: relative;
+}
+
+.campo-wrapper {
+  position: relative;
+  display: flex;
+}
+
 .campo {
-  width: 100%; min-height: 38px;
-  padding: 8px var(--e3);
+  width: 100%; min-height: 52px;
+  padding: 20px var(--e4) 6px var(--e4);
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio-sm);
   background: var(--cor-superficie);
   color: var(--cor-texto);
-  font-size: var(--t-sm);
+  font-size: var(--t-base);
   transition: border-color var(--rapido) var(--curva),
               box-shadow var(--rapido) var(--curva);
 }
-.campo::placeholder { color: var(--cor-texto-desabilitado); }
+.campo::placeholder { color: transparent; } /* Usa o rótulo em vez do placeholder */
 .campo:hover:not(:disabled) { border-color: var(--cinza-500); }
 .campo:focus {
   outline: none;
@@ -259,6 +304,26 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--risco-base) 22%, transparent);
 }
 .campo.valido { border-color: var(--ok-base); }
+
+.rotulo-flutuante {
+  position: absolute;
+  left: var(--e4);
+  top: 0;
+  transform: translateY(16px);
+  font-size: var(--t-base);
+  color: var(--cor-texto-suave);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform var(--rapido) var(--ease-out-expo),
+              color var(--rapido) var(--ease-out-expo);
+}
+
+.campo:focus ~ .rotulo-flutuante,
+.campo:not(:placeholder-shown) ~ .rotulo-flutuante {
+  transform: translate(0, 7px) scale(0.78);
+  color: var(--cor-foco);
+  font-weight: var(--peso-forte);
+}
 
 select.campo {
   /* A seta padrão do Windows é cinza-escura e quadrada; esta acompanha o

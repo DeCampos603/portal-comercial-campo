@@ -37,6 +37,7 @@ const TRACOS = {
     + '<circle cx="12" cy="10.5" r="2.4"/>',
   agenda: '<rect x="4" y="5.5" width="16" height="14" rx="1.8"/>'
     + '<path d="M4 10h16M9 3.5v4M15 3.5v4"/><path d="M8.5 14h3"/>',
+  email: '<path d="M4 7l8 5 8-5M4 17h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2z"/>',
 };
 
 /** @param {keyof TRACOS} nome */
