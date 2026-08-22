@@ -48,6 +48,12 @@ function desenhar(alvo) {
           </div>
           <p class="minusculo suave" style="margin-bottom: 8px;">Selecione os contatos que receberão o disparo.</p>
           
+          <div class="linha" style="margin-bottom: 8px; gap: 8px;">
+            <input class="campo" type="text" id="disp-novo-numero" placeholder="Ex: 21999999999" style="flex: 1;">
+            <input class="campo" type="text" id="disp-novo-nome" placeholder="Nome (opcional)" style="flex: 1;">
+            <button class="btn btn--secundario btn--pequeno" id="disp-add-manual">Adicionar</button>
+          </div>
+
           <div id="disp-lista-clientes" class="rolagem" style="flex: 1; max-height: 400px; border: 1px solid var(--cor-borda); border-radius: 4px; padding: 8px;">
           </div>
         </div>
@@ -119,6 +125,26 @@ function ligar(alvo, clientesIniciais) {
 
   alvo.querySelector('#disp-desmarcar-todos').addEventListener('click', () => {
     alvo.querySelectorAll('.disp-cliente-cb').forEach(cb => cb.checked = false);
+  });
+
+  alvo.querySelector('#disp-add-manual').addEventListener('click', () => {
+    const novoNum = alvo.querySelector('#disp-novo-numero').value.trim();
+    const novoNome = alvo.querySelector('#disp-novo-nome').value.trim() || 'Sem Nome';
+    
+    if (novoNum.length < 8) {
+      avisar('Digite um telefone válido.', 'erro');
+      return;
+    }
+    
+    contatosAtuais.unshift({
+      nome: novoNome,
+      telefone: novoNum
+    });
+    
+    renderizarLista();
+    alvo.querySelector('#disp-novo-numero').value = '';
+    alvo.querySelector('#disp-novo-nome').value = '';
+    avisar('Contato manual adicionado no topo da lista!', 'ok');
   });
 
   btnImportar.addEventListener('click', async () => {
