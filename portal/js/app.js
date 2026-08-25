@@ -7,7 +7,7 @@
 
 import { entrar, sair, sessaoAtual, carregarPerfil, perfil } from './supabase.js';
 import { carregar, atualizar, estado, aoMudar, sincronizarFila } from './nucleo/dados.js';
-import { formatarDataHora, diasDesde } from './nucleo/moeda.js';
+import { formatarDataHora, formatarData, diasDesde } from './nucleo/moeda.js';
 import { icone } from './nucleo/ui.js';
 import { DIAS_ATE_TABELA_VELHA } from './config.js';
 
@@ -154,15 +154,52 @@ export function faixaDeEstado() {
     </div>`);
   }
 
-  const item = estado.catalogo.find((i) => i.atualizado_em);
-  const idade = item ? diasDesde(item.atualizado_em) : null;
-  if (idade !== null && idade > DIAS_ATE_TABELA_VELHA) {
-    avisos.push(`<div class="faixa faixa--atencao">
-      📅 Tabela de preços de ${idade} dias atrás — pode estar desatualizada.
-    </div>`);
+  avisos.push(faixaDaTabela());
+  return avisos.filter(Boolean).join('');
+}
+
+/**
+ * Idade da TABELA DE PREÇOS — não da sincronização.
+ *
+ * 🔴 Isto olhava para `atualizado_em`, que é quando a Action gravou. Como ela
+ *    roda todo dia, a conta dava sempre "0 dias" e o aviso nunca aparecia.
+ *    Uma tabela de 31/07 passou 25 dias no ar assim: a automação verde, o
+ *    portal dizendo "Sincronizado", e o representante cotando com preço
+ *    vencido. A automação estava certa — ela sincronizava fielmente um
+ *    arquivo que ninguém tinha trocado.
+ *
+ *    Agora a conta é sobre `data_tabela`, a data que a própria planilha
+ *    declara. É a única que responde "esse preço presta?".
+ */
+function faixaDaTabela() {
+  const comData = estado.catalogo.find((i) => i.data_tabela);
+
+  if (!comData) {
+    // Sem a coluna (migração 06 pendente) não há o que afirmar. Ficar calado
+    // é melhor que inventar uma idade a partir da data da sincronização —
+    // foi justamente esse número que enganou por 25 dias.
+    return '';
   }
 
-  return avisos.join('');
+  const idade = diasDesde(comData.data_tabela);
+  if (idade === null) return '';
+
+  const quando = formatarData(comData.data_tabela);
+  if (idade <= DIAS_ATE_TABELA_VELHA) {
+    return `<div class="faixa faixa--info">
+      📅 Tabela de preços de <strong>${quando}</strong>${
+        idade > 0 ? ` — há ${idade} dia(s)` : ' — de hoje'}.
+    </div>`;
+  }
+
+  const grave = idade > DIAS_ATE_TABELA_VELHA * 3;
+  return `<div class="faixa faixa--${grave ? 'risco' : 'atencao'}">
+    📅 Tabela de preços de <strong>${quando}</strong> — <strong>${idade} dias</strong>.
+    ${grave
+      ? 'Isso é muito tempo para uma tabela semanal: confira se o link no '
+        + 'GitHub aponta para a planilha certa antes de cotar.'
+      : 'Pode ter saído tabela nova — confirme antes de fechar pedido.'}
+  </div>`;
 }
 
 // ------------------------------------------------------------- início

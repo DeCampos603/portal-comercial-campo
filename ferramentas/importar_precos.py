@@ -150,6 +150,37 @@ def ler_categorias_por_item(planilha):
     return por_item
 
 
+def ler_data_da_tabela(aba):
+    """
+    A data que a PRÓPRIA planilha declara, na célula "Data:" do cabeçalho.
+
+    É diferente de "quando sincronizamos": a Action roda todo dia, então a
+    data da sincronização é sempre hoje e não diz nada sobre a idade do preço.
+    Uma planilha de 31/07 ficou 25 dias no ar exatamente por causa disso.
+
+    Procura o rótulo "Data" nas primeiras linhas em vez de fixar a célula:
+    o cabeçalho do formulário já mudou de lugar antes, e falhar aqui não pode
+    derrubar a importação inteira — sem data, o portal só deixa de avisar.
+    """
+    for linha in aba.iter_rows(min_row=1, max_row=LINHA_CABECALHO - 1):
+        rotulo = next((c for c in linha
+                       if isinstance(c.value, str) and c.value.strip().lower().startswith("data")),
+                      None)
+        if not rotulo:
+            continue
+        for celula in linha[rotulo.column - 1:]:
+            if isinstance(celula.value, datetime):
+                return celula.value.date()
+            if isinstance(celula.value, str):
+                texto = celula.value.strip()
+                for formato in ("%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"):
+                    try:
+                        return datetime.strptime(texto, formato).date()
+                    except ValueError:
+                        pass
+    return None
+
+
 def importar(caminho_xlsx: Path):
     planilha = openpyxl.load_workbook(caminho_xlsx, data_only=True)
 
@@ -222,7 +253,12 @@ def importar(caminho_xlsx: Path):
             "statusEstoque": extra.get("statusEstoque"),
         })
 
-    return itens, comissoes, avisos, lateral
+    data_tabela = ler_data_da_tabela(aba)
+    if data_tabela is None:
+        avisos.append("Não achei a data da tabela no cabeçalho — o portal "
+                      "ficará sem o aviso de preço velho.")
+
+    return itens, comissoes, avisos, lateral, data_tabela
 
 
 def main():
@@ -235,16 +271,19 @@ def main():
         raise SystemExit(f"Arquivo não encontrado: {args.xlsx}")
 
     print(f"Lendo {args.xlsx.name}…")
-    itens, comissoes, avisos, lateral = importar(args.xlsx)
+    itens, comissoes, avisos, lateral, data_tabela = importar(args.xlsx)
 
     agora = datetime.now(FUSO_BR)
     catalogo = {
         "versao": agora.strftime("%Y-%m-%d"),
         "atualizadoEm": agora.isoformat(timespec="seconds"),
+        # De quando é a TABELA, que é diferente de quando a lemos.
+        "dataTabela": data_tabela.isoformat() if data_tabela else None,
         "origem": args.xlsx.name,
         "comissoes": comissoes,
         "itens": itens,
     }
+    print(f"Data declarada na planilha: {data_tabela or '— não encontrada'}")
 
     args.saida.parent.mkdir(parents=True, exist_ok=True)
     args.saida.write_text(

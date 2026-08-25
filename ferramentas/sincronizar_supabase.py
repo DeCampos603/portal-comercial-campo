@@ -171,13 +171,25 @@ def baixar_xlsx(bruto):
 
 def montar_itens_do_xlsx(conteudo):
     """Traduz o retorno de importar_precos para as colunas do banco."""
-    itens, _comissoes, avisos, _lateral = importar_xlsx(conteudo)
+    itens, _comissoes, avisos, _lateral, data_tabela = importar_xlsx(conteudo)
     for aviso in avisos[:10]:
         print(f"   ⚠️  {aviso}")
     if len(avisos) > 10:
         print(f"   ⚠️  … e mais {len(avisos) - 10} aviso(s)")
 
+    if data_tabela:
+        idade = (datetime.now(FUSO_BR).date() - data_tabela).days
+        print(f"   📅 tabela de {data_tabela.strftime('%d/%m/%Y')} "
+              f"({idade} dia(s) atrás)")
+        if idade > 14:
+            print(f"   ⚠️  A PLANILHA NÃO MUDA HÁ {idade} DIAS. A sincronização "
+                  "está fiel a um arquivo parado — confira se o link aponta "
+                  "para a planilha certa.")
+
     return [{
+        # De quando é a TABELA. Sem isto, o portal só sabe quando SINCRONIZOU
+        # — e como a Action roda todo dia, o catálogo parece novo para sempre.
+        "data_tabela": data_tabela.isoformat() if data_tabela else None,
         "codigo_sigma": i["codigoSigma"],
         "codigo_fabricante": i["codigoFabricante"],
         "descricao": i["descricao"],
@@ -192,6 +204,12 @@ def montar_itens_do_xlsx(conteudo):
 
 
 def montar_itens(linhas):
+    """
+    Caminho do CSV (aba 'Precos' limpa). Não devolve `data_tabela`: um CSV de
+    uma aba só não carrega o cabeçalho do formulário onde a data vive.
+    Omitir a chave é melhor que mandar null — no upsert, omitir PRESERVA a
+    data que já estava lá; mandar null apagaria uma informação boa.
+    """
     if not linhas:
         raise SystemExit("🔴 CSV vazio.")
     mapa = mapear_colunas(linhas[0])
@@ -295,15 +313,35 @@ def enviar(url, chave, itens, lote=500):
     for item in itens:
         item["atualizado_em"] = agora
 
+    # `data_tabela` veio na migração 06. Se ela não foi aplicada, o PostgREST
+    # recusa o lote inteiro por causa de UMA coluna — e o representante
+    # ficaria sem a atualização de PREÇO, que é o que realmente importa, por
+    # falta de um campo que só serve para exibir um aviso. Então tenta com, e
+    # se for esse o motivo da recusa, tenta de novo sem.
+    sem_data_tabela = False
+
     for inicio in range(0, len(itens), lote):
         fatia = itens[inicio:inicio + lote]
-        resposta = requests.post(
-            f"{url}/rest/v1/catalogo?on_conflict=codigo_sigma",
-            headers=cabecalhos, json=fatia, timeout=120,
-        )
-        if resposta.status_code >= 300:
+
+        for tentativa in range(2):
+            carga = ([{k: v for k, v in i.items() if k != "data_tabela"} for i in fatia]
+                     if sem_data_tabela else fatia)
+            resposta = requests.post(
+                f"{url}/rest/v1/catalogo?on_conflict=codigo_sigma",
+                headers=cabecalhos, json=carga, timeout=120,
+            )
+            if resposta.status_code < 300:
+                break
+            if tentativa == 0 and not sem_data_tabela and "data_tabela" in resposta.text:
+                print("   ⚠️  Coluna data_tabela ausente — rode "
+                      "modelos/supabase/06-data-da-tabela.sql.")
+                print("      Seguindo sem ela: o preço atualiza, mas o portal "
+                      "não avisa quando a tabela está velha.")
+                sem_data_tabela = True
+                continue
             raise SystemExit(f"🔴 Supabase recusou o lote "
                              f"{inicio // lote + 1}: {resposta.status_code} {resposta.text[:400]}")
+
         print(f"   lote {inicio // lote + 1}: {len(fatia)} itens ✅")
 
 

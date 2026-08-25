@@ -79,7 +79,9 @@ def enviar(url, chave, tabela, registros, conflito, lote=500):
 
 def montar_catalogo(caminho):
     dados = json.loads(caminho.read_text(encoding="utf-8"))
+    data_tabela = dados.get("dataTabela")
     return [{
+        "data_tabela": data_tabela,      # de quando é a TABELA, não a carga
         "codigo_sigma": i["codigoSigma"],
         "codigo_fabricante": i["codigoFabricante"],
         "descricao": i["descricao"],

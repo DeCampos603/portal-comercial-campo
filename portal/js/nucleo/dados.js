@@ -39,7 +39,9 @@ const COLUNAS_CLIENTE_BASE =
 const COLUNAS_CLIENTE = `${COLUNAS_CLIENTE_BASE}, cnpj, inscricao_estadual`;
 
 /** Sinaliza à interface o que o banco ainda não tem. */
-export const recursos = { cnpj: true, cotacoes: true, fotografiaCotacao: true };
+export const recursos = {
+  cnpj: true, cotacoes: true, fotografiaCotacao: true, dataTabela: true,
+};
 
 /**
  * Busca todas as linhas de uma tabela, paginando.
@@ -80,6 +82,32 @@ async function buscarClientes() {
 }
 
 /** Cotações. Tabela nova: se não existir, segue sem histórico. */
+const COLUNAS_CATALOGO_BASE =
+  'codigo_sigma, codigo_fabricante, descricao, valor_unitario_centavos, ipi, '
+  + 'st, categoria, grupo, saldo, status_estoque, atualizado_em';
+
+/**
+ * Catálogo. `data_tabela` veio na migração 06 — de quando é a PLANILHA, que é
+ * diferente de quando sincronizamos. Mesmo plano B das outras tabelas: sem a
+ * coluna, o PostgREST recusaria a consulta inteira e o portal ficaria sem
+ * catálogo em vez de ficar só sem o aviso de preço velho.
+ */
+async function buscarCatalogo() {
+  try {
+    const dados = await buscarTudo(
+      'catalogo', `${COLUNAS_CATALOGO_BASE}, data_tabela`, 'descricao');
+    recursos.dataTabela = true;
+    return dados;
+  } catch (erro) {
+    if (!/column .* does not exist|data_tabela/i.test(erro.message || '')) throw erro;
+    recursos.dataTabela = false;
+    console.warn('Coluna data_tabela ausente — rode '
+      + 'modelos/supabase/06-data-da-tabela.sql. O portal funciona, mas não '
+      + 'avisa quando a tabela de preços está velha.');
+    return buscarTudo('catalogo', COLUNAS_CATALOGO_BASE, 'descricao');
+  }
+}
+
 const COLUNAS_COTACAO_BASE =
   'id, cliente_id, representante_id, numero, nome_cliente, data, situacao, '
   + 'total_produtos_centavos, total_ipi_centavos, total_com_ipi_centavos, '
@@ -144,9 +172,7 @@ export async function atualizar() {
 
   try {
     const [catalogo, clientes, visitas, cotacoes] = await Promise.all([
-      buscarTudo('catalogo',
-        'codigo_sigma, codigo_fabricante, descricao, valor_unitario_centavos, ipi, st, categoria, grupo, saldo, status_estoque, atualizado_em',
-        'descricao'),
+      buscarCatalogo(),
       buscarClientes(),
       buscarTudo('visitas',
         'id, cliente_id, representante_id, nome_cliente, data, hora, duracao_minutos, status, objetivo, observacoes, resultado, atualizado_em',
