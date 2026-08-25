@@ -13,7 +13,7 @@ import { estado, aoMudar, salvarCotacao, recursos } from '../nucleo/dados.js';
 import { imprimirHTML } from './impressao.js';
 import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
 import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
-import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel } from '../nucleo/ui.js';
+import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel, comCarregando } from '../nucleo/ui.js';
 import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from '../carteira/formulario.js';
 import { calcularLinha, calcularTotais, rotuloEstoque, sanitizarParaCliente } from './calculo.js';
 import { gerarPedidoHTML } from './exportar.js';
@@ -809,15 +809,18 @@ function ligarEventos(alvo) {
 
   // `imprimir` é assíncrona: sem o catch, uma falha ao gravar o histórico
   // viraria "unhandled rejection" e o representante não veria nada acontecer.
-  alvo.querySelector('#cot-imprimir')?.addEventListener('click', () => {
-    imprimir(alvo).catch((erro) => {
+  // `comCarregando` trava o botão enquanto a tarefa roda. Sem isso, um toque
+  // repetido em 3G ruim gerava DUAS cotações — o clique não dava sinal nenhum
+  // de que já tinha sido registrado.
+  alvo.querySelector('#cot-imprimir')?.addEventListener('click', (e) => {
+    comCarregando(e.currentTarget, () => imprimir(alvo)).catch((erro) => {
       console.error('Falha ao gerar o pedido:', erro);
       avisar(`Não consegui gerar o PDF: ${erro.message}`, 'risco');
     });
   });
 
-  alvo.querySelector('#cot-salvar')?.addEventListener('click', () => {
-    salvar().catch((erro) => {
+  alvo.querySelector('#cot-salvar')?.addEventListener('click', (e) => {
+    comCarregando(e.currentTarget, salvar).catch((erro) => {
       console.error('Falha ao salvar a cotação:', erro);
       avisar(`Não consegui salvar: ${erro.message}`, 'risco');
     });

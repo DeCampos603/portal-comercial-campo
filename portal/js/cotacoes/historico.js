@@ -14,7 +14,7 @@
  */
 
 import { estado, aoMudar, salvarCotacao, excluirCotacao, recursos } from '../nucleo/dados.js';
-import { esc, vazio, avisar, confirmar, abrirPainel } from '../nucleo/ui.js';
+import { esc, vazio, avisar, confirmar, abrirPainel, comCarregando } from '../nucleo/ui.js';
 import { formatarBRL, formatarData, formatarPercentual, hojeISO } from '../nucleo/moeda.js';
 import { validadeCotacao } from '../nucleo/diasUteis.js';
 import { criarIndice, buscar } from '../nucleo/busca.js';
@@ -314,8 +314,11 @@ function ligar(alvo) {
     desenhar(alvo);
   });
 
-  alvo.querySelector('#hist-lote-pdf')?.addEventListener('click', () => {
-    gerarPDFsEmLote(cotacoesFiltradas().filter((c) => selecionadas.has(c.id)));
+  alvo.querySelector('#hist-lote-pdf')?.addEventListener('click', (e) => {
+    // Montar N folhas e esperar as logos leva tempo real: sem travar o
+    // botão, o segundo clique dispara um print por cima do primeiro.
+    comCarregando(e.currentTarget, () =>
+      gerarPDFsEmLote(cotacoesFiltradas().filter((c) => selecionadas.has(c.id))));
   });
 
   alvo.querySelector('#hist-lote-excluir')?.addEventListener('click', async () => {

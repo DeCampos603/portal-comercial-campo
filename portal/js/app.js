@@ -9,7 +9,7 @@ import { entrar, sair, sessaoAtual, carregarPerfil, perfil } from './supabase.js
 import { carregar, atualizar, estado, aoMudar, sincronizarFila } from './nucleo/dados.js';
 import { formatarDataHora, formatarData, diasDesde } from './nucleo/moeda.js';
 import { icone } from './nucleo/ui.js';
-import { DIAS_ATE_TABELA_VELHA } from './config.js';
+import { DIAS_ATE_TABELA_VELHA, DISPARADOR_HABILITADO } from './config.js';
 
 import { montarCotacoes } from './cotacoes/tela.js';
 import { montarHistorico } from './cotacoes/historico.js';
@@ -24,8 +24,10 @@ const SECOES = [
   { hash: '#/carteira',  rotulo: 'Carteira',  icone: 'carteira',  montar: montarCarteira },
   { hash: '#/mapa',      rotulo: 'Mapa',      icone: 'mapa',      montar: montarMapa },
   { hash: '#/agenda',    rotulo: 'Agenda',    icone: 'agenda',    montar: montarAgenda },
-  { hash: '#/disparador',rotulo: 'Disparos',  icone: 'email',     montar: montarDisparador },
-];
+  // Ver DISPARADOR_HABILITADO em config.js — desligado por ora.
+  { hash: '#/disparador', rotulo: 'Disparos', icone: 'email',
+    montar: montarDisparador, habilitado: DISPARADOR_HABILITADO },
+].filter((s) => s.habilitado !== false);
 
 const el = (id) => document.getElementById(id);
 let desmontarSecaoAtual = null;

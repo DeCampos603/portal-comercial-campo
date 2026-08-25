@@ -8,7 +8,7 @@
  * ⚠️ Caminhos relativos: o GitHub Pages serve em subdiretório.
  */
 
-const VERSAO = 'portal-v14';
+const VERSAO = 'portal-v15';
 
 const CASCA = [
   './',
@@ -45,6 +45,10 @@ const CASCA = [
   './js/carteira/formulario.js',
   './js/mapa/tela.js',
   './js/agenda/tela.js',
+  // Importado por app.js mesmo com a aba desligada (DISPARADOR_HABILITADO).
+  // Fora desta lista, o portal não abre OFFLINE: o import falha e leva
+  // app.js junto. Módulo importado é dependência de partida, não opcional.
+  './js/disparador/tela.js',
 ];
 
 self.addEventListener('install', (evento) => {

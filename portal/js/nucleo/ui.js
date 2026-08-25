@@ -49,6 +49,49 @@ export function icone(nome) {
     stroke-linejoin="round" aria-hidden="true" focusable="false">${tracos}</svg>`;
 }
 
+/**
+ * Executa uma tarefa assíncrona com o botão em estado de CARREGANDO.
+ *
+ * O manual de UI do workspace pede sete estados por controle interativo
+ * (`.agents/rules/ui-ux-cognitive-engineering.md`); os botões daqui tinham
+ * cinco. Faltava justamente o que mais importa numa ferramenta de campo: o
+ * representante clica "PDF do cliente" com 3G ruim, nada muda na tela, e ele
+ * clica de novo — gerando duas cotações.
+ *
+ * Três cuidados que fazem a diferença entre ter e não ter o estado:
+ *
+ * · A LARGURA é congelada antes de trocar o texto. Sem isso o botão encolhe
+ *   ao virar spinner e a barra de ações inteira dança — é layout shift (CLS),
+ *   e a meta do manual é abaixo de 0,1.
+ * · `aria-busy` + `aria-disabled` para leitor de tela, e `disabled` de fato
+ *   para bloquear o clique repetido. Só o visual não impede o duplo envio.
+ * · `finally` restaura mesmo se a tarefa explodir. Botão que fica travado em
+ *   "carregando" depois de um erro é pior que erro nenhum.
+ */
+export async function comCarregando(botao, tarefa) {
+  if (!botao) return tarefa();
+
+  const textoOriginal = botao.innerHTML;
+  const larguraOriginal = botao.style.minWidth;
+  // Largura FRACIONADA, sem arredondar: `Math.ceil` de 121,4 dá 122 e o botão
+  // cresce 1px ao entrar em carregando. É pouco, e ainda assim é layout shift.
+  botao.style.minWidth = `${botao.getBoundingClientRect().width}px`;
+  botao.setAttribute('aria-busy', 'true');
+  // Só `disabled` — sem `aria-disabled`. O atributo nativo já barra o clique e
+  // já é anunciado; o ARIA em cima disparava a regra de botão desabilitado no
+  // CSS e deixava o botão cinza enquanto trabalhava, parecendo travado.
+  botao.disabled = true;
+
+  try {
+    return await tarefa();
+  } finally {
+    botao.disabled = false;
+    botao.removeAttribute('aria-busy');
+    botao.innerHTML = textoOriginal;
+    botao.style.minWidth = larguraOriginal;
+  }
+}
+
 /** Aviso temporário no rodapé da tela. */
 export function avisar(mensagem, tipo = 'info', ms = 3200) {
   document.querySelector('.torrada')?.remove();

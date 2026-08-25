@@ -25,3 +25,23 @@ export const DIAS_ATE_TABELA_VELHA = 7;
 /** Centro do mapa (Rio de Janeiro) e zoom inicial. */
 export const MAPA_CENTRO = [-22.9068, -43.1729];
 export const MAPA_ZOOM = 10;
+
+/**
+ * Disparo de WhatsApp em massa — DESLIGADO por enquanto.
+ *
+ * A aba "Disparos" some da navegação e o módulo nem é carregado. Nada foi
+ * apagado: `js/disparador/tela.js` continua no lugar e volta trocando isto
+ * para `true`.
+ *
+ * Além do pedido do usuário, há razões para manter desligado até a decisão
+ * ser consciente:
+ *
+ * · O envio depende do motor local (`motor-whatsapp`, porta 8080). Com ele
+ *   fora do ar, o botão falha na cara do representante sem explicação útil.
+ * · Envio em massa a partir de conta pessoal é o caminho mais curto para o
+ *   WhatsApp bloquear o número — que é o mesmo número usado para atender
+ *   cliente todo dia.
+ * · Mensagem comercial não solicitada para 378 clientes é assunto de LGPD:
+ *   exige base legal e caminho de descadastro, que hoje não existem.
+ */
+export const DISPARADOR_HABILITADO = false;

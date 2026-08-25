@@ -3,12 +3,15 @@
 
    Regras que valem para o arquivo inteiro:
 
-   · Todo componente interativo tem os CINCO estados desenhados: repouso,
-     hover, foco, ativo e desabilitado. Faltar um deles é o que faz uma
-     interface "parecer amadora" sem que se saiba apontar por quê.
+   · Todo componente interativo tem os SETE estados de `.agents/rules/
+     ui-ux-cognitive-engineering.md`: repouso, hover, ativo, foco, CARREGANDO,
+     sucesso e erro. Faltar um é o que faz uma interface "parecer amadora"
+     sem que se saiba apontar por quê — e o que mais falta em ferramenta de
+     campo é o de carregando, porque sem ele o usuário clica duas vezes.
    · Nada de valor solto: cor, espaço, raio e tempo saem dos tokens de
      base.css. Um `padding: 13px` desalinha com todo o resto da tela.
-   · Alvo de toque mínimo de 44px no celular (WCAG 2.5.5).
+   · Alvo de toque de 48px onde o ponteiro é grosso (`pointer: coarse`),
+     não por largura de tela — tablet em paisagem tem 1024px e é dedo.
    ===================================================================== */
 
 /* ---------------------------------------------------------------- casca */
@@ -214,10 +217,6 @@
 .btn:disabled::after, .btn[aria-disabled='true']::after {
   display: none;
 }
-.btn[aria-busy="true"] {
-  pointer-events: none;
-  color: transparent !important;
-}
 
 .btn--primario {
   --btn-fundo: var(--cor-primaria);
@@ -255,9 +254,66 @@
 
 .btn--pequeno { min-height: 30px; padding: 0 var(--e2); font-size: var(--t-xs); }
 
-@media (max-width: 860px) {
-  .btn { min-height: 44px; padding: 0 var(--e4); }
-  .btn--pequeno { min-height: 36px; padding: 0 var(--e3); }
+/* ---- Estado 5 de 7: CARREGANDO
+   🔴 O spinner mora no ::before, NÃO no ::after. O ::after já é o brilho de
+      hover do botão, e ele nasce com `opacity: 0` — um spinner ali herdava
+      essa opacidade e ficava INVISÍVEL. Pior: `.btn[aria-disabled]::after`
+      o escondia de vez com `display:none`. O botão só perdia o texto e
+      ficava cinza, sem nada no lugar. Dois pseudo-elementos, dois donos.
+
+   O texto some sem sair do fluxo (`transparent`, não `display:none`), então
+   a largura não muda e a barra de ações não dança — layout shift zero.
+   O giro anima só `transform`: resolve na GPU, sem reflow por quadro. */
+.btn[aria-busy='true'] {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+  cursor: progress;
+  /* Vence o cinza de :disabled. Um botão primário que perde a cor enquanto
+     trabalha parece quebrado; ele precisa continuar sendo o botão primário,
+     só que ocupado. */
+  opacity: 1;
+  background: var(--btn-fundo);
+  border-color: var(--btn-borda);
+  transform: none;
+}
+.btn[aria-busy='true']::before {
+  content: '';
+  position: absolute; inset: 0; margin: auto;
+  width: 15px; height: 15px;
+  border: 2px solid var(--btn-texto);
+  border-block-start-color: transparent;
+  border-radius: 50%;
+  opacity: 1;
+  animation: girar .6s linear infinite;
+}
+@keyframes girar { to { transform: rotate(1turn); } }
+
+/* Quem pediu menos movimento recebe um pulso no lugar do giro: ainda
+   comunica "trabalhando", sem rotação contínua. */
+@media (prefers-reduced-motion: reduce) {
+  .btn[aria-busy='true']::before {
+    animation: pulsar 1.2s ease-in-out infinite;
+    border-block-start-color: var(--btn-texto);
+  }
+}
+
+/* Alvo de toque de 48px — o mínimo do manual do workspace, acima dos 44px da
+   WCAG 2.5.5. Dedo em ônibus balançando não acerta 44.
+
+   🔴 A condição é `pointer: coarse`, NÃO a largura. Largura não diz se há
+      dedo: um tablet em paisagem tem 1024px e é toque puro, e media query de
+      celular não o alcançava — os botões pequenos ficavam com 30px lá.
+      `pointer: coarse` pergunta o que interessa: o ponteiro é grosso?
+      Também cobre o caso inverso — janela estreita no desktop com mouse não
+      precisa engordar nada. */
+@media (pointer: coarse), (max-width: 860px) {
+  .btn { min-height: 48px; padding: 0 var(--e4); }
+  /* O botão pequeno também sobe para 48. Ele aparece em linha de tabela
+     ("🖨️", "Limpar", "Trocar") e é justamente onde o dedo erra: alvo
+     visualmente pequeno em lista rolável. A densidade perdida é pouca perto
+     do toque errado. */
+  .btn--pequeno { min-height: 48px; padding: 0 var(--e3); }
 }
 
 /* ================================================================ CAMPOS */
@@ -406,14 +462,17 @@ input[type='checkbox']:disabled, input[type='radio']:disabled {
 
 /* A área de clique é o RÓTULO inteiro, não os 17px da caixa. */
 label.linha { cursor: pointer; user-select: none; }
-@media (max-width: 860px) {
-  label.linha { min-height: 40px; padding: 2px 0; }
-  input[type='checkbox'], input[type='radio'] { width: 20px; height: 20px; }
+@media (pointer: coarse), (max-width: 860px) {
+  /* A caixa em si continua com 22px — encher a tela de quadrados grandes fica
+     feio. Quem cumpre os 48px é o RÓTULO, que é a área realmente clicável:
+     é o caminho de "espaçamento compensatório" que o manual prevê. */
+  label.linha { min-height: 48px; padding: var(--e1) 0; }
+  input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; }
 }
 
-@media (max-width: 860px) {
+@media (pointer: coarse), (max-width: 860px) {
   /* < 16px faz o iOS dar zoom ao focar o campo */
-  .campo { min-height: 44px; font-size: 16px; }
+  .campo { min-height: 48px; font-size: 16px; }
 }
 
 /* Busca principal: maior que os outros campos porque é a ação de entrada
