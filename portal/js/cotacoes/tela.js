@@ -15,8 +15,8 @@ import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
 import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
 import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel, comCarregando } from '../nucleo/ui.js';
 import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from '../carteira/formulario.js';
-import { calcularLinha, calcularTotais, rotuloEstoque, sanitizarParaCliente } from './calculo.js';
-import { gerarPedidoHTML } from './exportar.js';
+import { calcularLinha, calcularTotais, rotuloEstoque, classificarEstoque, sanitizarParaCliente } from './calculo.js';
+import { gerarPedidoHTML, formatarNomeArquivoPDF } from './exportar.js';
 import { empresa, pedido } from './dadosPedido.js';
 import { historicoDoItem, seloHistorico, itensParaRepor } from './historicoItem.js';
 import { validadeCotacao } from '../nucleo/diasUteis.js';
@@ -26,6 +26,8 @@ const RASCUNHO = 'cotacao_rascunho';
 
 /** { codigoSigma -> quantidade } */
 let itensDaCotacao = new Map();
+/** { codigoSigma -> percentualDesconto } */
+let descontosDaCotacao = new Map();
 let clienteId = null;
 
 /**
@@ -48,13 +50,54 @@ let indiceClientes = null;
 let resultadosBusca = [];
 let selecionado = 0;
 let soComEstoque = false;
+let modoVisualizacao = localStorage.getItem('cot_modo_visualizacao') || 'tabela';
+
+export function obterFilialAtiva() {
+  return localStorage.getItem('portal_filial_ativa') || 'matriz_rj';
+}
+
+export function definirFilialAtiva(filial) {
+  localStorage.setItem('portal_filial_ativa', filial);
+  const seletor = document.getElementById('seletor-filial');
+  if (seletor && seletor.value !== filial) seletor.value = filial;
+}
+
+export function obterSaldoFilial(item, filial = obterFilialAtiva()) {
+  if (!item) return 0;
+  if (item.saldos_filiais && item.saldos_filiais[filial] !== undefined) {
+    return item.saldos_filiais[filial];
+  }
+  const saldoBase = item.saldo != null ? Number(item.saldo) : null;
+  if (saldoBase === null) return null;
+  if (filial === 'matriz_rj') return saldoBase;
+  if (filial === 'baixada_rj') return Math.max(0, Math.floor(saldoBase * 0.4));
+  if (filial === 'vitoria_es') return Math.max(0, Math.floor(saldoBase * 0.25));
+  return saldoBase;
+}
+
+export function atualizarBadgeCarrinho() {
+  let totalItens = 0;
+  for (const qtd of itensDaCotacao.values()) {
+    totalItens += Number(qtd) || 0;
+  }
+  const badge = document.getElementById('badge-carrinho');
+  if (badge) {
+    badge.textContent = totalItens;
+    badge.dataset.count = totalItens;
+    badge.classList.remove('animar-pulso');
+    void badge.offsetWidth;
+    if (totalItens > 0) badge.classList.add('animar-pulso');
+  }
+}
 
 // ------------------------------------------------------------ rascunho
 
 function salvarRascunho() {
   try {
     localStorage.setItem(RASCUNHO, JSON.stringify({
-      itens: [...itensDaCotacao], clienteId, observacoes, cotacaoId,
+      itens: [...itensDaCotacao],
+      descontos: [...descontosDaCotacao],
+      clienteId, observacoes, cotacaoId,
       em: new Date().toISOString(),
     }));
   } catch { /* modo privativo: seguir sem rascunho */ }
@@ -69,10 +112,12 @@ function lerRascunho() {
 
 function limparCotacao() {
   itensDaCotacao = new Map();
+  descontosDaCotacao = new Map();
   clienteId = null;
   observacoes = '';
   cotacaoId = null;          // o que vier depois é documento novo
   localStorage.removeItem(RASCUNHO);
+  atualizarBadgeCarrinho();
 }
 
 // ---------------------------------------------------------------- api
@@ -92,9 +137,13 @@ export function carregarNaCotacao(cotacaoSalva) {
   const ausentes = [];
 
   itensDaCotacao = new Map();
+  descontosDaCotacao = new Map();
   for (const item of cotacaoSalva.itens ?? []) {
     if (noCatalogo.has(item.codigo_sigma)) {
       itensDaCotacao.set(item.codigo_sigma, item.quantidade);
+      if (item.desconto_percentual) {
+        descontosDaCotacao.set(item.codigo_sigma, Number(item.desconto_percentual) || 0);
+      }
     } else {
       ausentes.push(item.codigo_sigma);
     }
@@ -107,6 +156,7 @@ export function carregarNaCotacao(cotacaoSalva) {
   cotacaoId = null;
   salvarRascunho();
 
+  atualizarBadgeCarrinho();
   return { carregados: itensDaCotacao.size, ausentes };
 }
 
@@ -124,10 +174,14 @@ export function montarCotacoes(alvo) {
     if (rascunho.itens?.length && itensDaCotacao.size === 0) {
       itensDaCotacao = new Map(rascunho.itens);
     }
+    if (rascunho.descontos?.length && descontosDaCotacao.size === 0) {
+      descontosDaCotacao = new Map(rascunho.descontos);
+    }
   }
 
   alvo.innerHTML = esqueleto();
   const soltar = aoMudar(() => redesenhar(alvo));
+  atualizarBadgeCarrinho();
   redesenhar(alvo);
   return soltar;
 }
@@ -293,7 +347,7 @@ function desenharClientes(termo) {
       role a lista ou digite para filtrar.</p>` : ''}
     <div style="max-height:300px;overflow-y:auto;
       border:1px solid var(--cor-borda);border-radius:var(--raio)">
-    <table class="tabela"><tbody>
+    <table class="tabela tabela-ibcs"><tbody>
       ${achados.map((c) => `<tr data-cliente="${esc(c.id)}" style="cursor:pointer">
         <td>
           <div class="forte">${esc(c.nome)}</div>
@@ -320,9 +374,14 @@ function blocoBusca() {
                  placeholder="Buscar por código Sigma, código do fabricante ou descrição…"
                  aria-label="Buscar item" aria-describedby="cot-dica">
         </div>
-        <label class="linha pequeno" style="gap:6px;cursor:pointer;white-space:nowrap">
+        <div class="linha" style="gap:8px;align-items:center">
+          <label class="linha pequeno" style="gap:6px;cursor:pointer;white-space:nowrap">
           <input type="checkbox" id="cot-so-estoque" ${soComEstoque ? 'checked' : ''}>
           Só com estoque
+        <div class="linha" style="gap:2px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px;background:var(--bg-subtle)">
+          <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'tabela' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-tabela" title="Visualização em tabela IBCS" style="min-height:34px;padding:0 8px">☰ Tabela</button>
+          <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'grid' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-grid" title="Visualização em grade de cards" style="min-height:34px;padding:0 8px">⊞ Cards</button>
+        </div>
         </label>
       </div>
       <p class="minusculo suave" id="cot-dica" style="margin:6px 0 0">
@@ -339,7 +398,8 @@ function montarLinhas() {
   const linhas = [];
   for (const [codigo, qtd] of itensDaCotacao) {
     const item = porCodigo.get(codigo);
-    if (item) linhas.push({ item, calculo: calcularLinha(item, qtd) });
+    const desc = descontosDaCotacao.get(codigo) ?? 0;
+    if (item) linhas.push({ item, calculo: calcularLinha(item, qtd, desc) });
   }
   return linhas;
 }
@@ -377,12 +437,26 @@ function blocoLinhas(linhas, totais) {
             : ''}
         </div>` : ''}
       </td>
-      <td class="qtd" style="width:90px">
+      <td class="qtd" style="width:85px">
         <input class="campo" type="number" min="1" step="1" inputmode="numeric"
                value="${calculo.qtd}" data-qtd="${esc(item.codigo_sigma)}"
                aria-label="Quantidade de ${esc(item.codigo_sigma)}" style="text-align:right">
       </td>
       <td class="valor">${formatarBRL(item.valor_unitario_centavos)}</td>
+      <td class="desconto" style="width:115px">
+        <div class="linha" style="gap:2px;align-items:center;justify-content:flex-end">
+          <input class="campo campo--compacto" type="number" min="0" max="100" step="0.5" inputmode="decimal"
+                 value="${calculo.descontoPercentual || 0}" data-desc="${esc(item.codigo_sigma)}"
+                 aria-label="Desconto de ${esc(item.codigo_sigma)}"
+                 style="text-align:right;width:52px;padding-right:4px">
+          <span class="minusculo suave">%</span>
+          <button type="button" class="btn btn--fantasma btn--pequeno"
+                  data-replicar-desc="${esc(item.codigo_sigma)}"
+                  title="Repetir este desconto (${calculo.descontoPercentual || 0}%) para todos os itens"
+                  style="padding:2px 5px;font-size:0.75rem;line-height:1;margin-left:2px"
+                  aria-label="Repetir este desconto para todos">⇊</button>
+        </div>
+      </td>
       <td class="valor minusculo suave">${formatarPercentual(item.ipi)}</td>
       <td class="valor forte">${formatarBRL(calculo.valorComIpi)}</td>
       <td style="width:36px">
@@ -403,16 +477,27 @@ function blocoLinhas(linhas, totais) {
     alertas.push(`<div class="faixa faixa--risco">❓ ${totais.itensSemPreco} item(ns) sem preço — não entram no total.</div>`);
 
   return `<div class="cartao">
-    <div class="cartao__cabecalho">
+    <div class="cartao__cabecalho" style="gap:8px;flex-wrap:wrap">
       <h2 style="flex:1">Itens da cotação</h2>
       <span class="pequeno suave">${totais.quantidadeItens} item(ns)</span>
+      <button class="btn btn--pequeno" id="cot-aplicar-desc-todos"
+              title="Definir ou repetir a mesma porcentagem de desconto para todos os itens">
+        🏷️ Repetir desconto em todos
+      </button>
       <button class="btn btn--pequeno btn--risco" id="cot-limpar">Limpar</button>
     </div>
     <div class="rolagem">
-      <table class="tabela">
+      <table class="tabela tabela-ibcs">
         <thead><tr>
           <th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th>
-          <th style="text-align:right">Unitário</th><th style="text-align:right">IPI</th>
+          <th style="text-align:right">Unitário</th>
+          <th style="text-align:right;width:120px">
+            Desc. %
+            <button type="button" class="btn btn--fantasma btn--pequeno" id="cot-th-aplicar-desc"
+                    title="Repetir desconto para todos os itens"
+                    style="padding:1px 5px;font-size:0.7rem;vertical-align:middle;margin-left:2px">⚡ Todos</button>
+          </th>
+          <th style="text-align:right">IPI</th>
           <th style="text-align:right">Total c/ IPI</th><th></th>
         </tr></thead>
         <tbody>${corpo}</tbody>
@@ -428,7 +513,12 @@ function blocoLinhas(linhas, totais) {
         </div>
         <div>
           <table style="width:100%;font-size:.95rem">
-            <tr><td class="suave">Total dos produtos</td>
+            ${totais.totalDesconto ? `
+            <tr><td class="suave">Total bruto dos produtos</td>
+                <td class="valor">${formatarBRL(totais.totalBruto)}</td></tr>
+            <tr><td class="suave" style="color:var(--cor-sucesso)">Desconto comercial</td>
+                <td class="valor" style="color:var(--cor-sucesso)">- ${formatarBRL(totais.totalDesconto)}</td></tr>` : ''}
+            <tr><td class="suave">Total dos produtos${totais.totalDesconto ? ' (líquido)' : ''}</td>
                 <td class="valor">${formatarBRL(totais.totalProdutos)}</td></tr>
             <tr><td class="suave">IPI</td>
                 <td class="valor">${formatarBRL(totais.totalIpi)}</td></tr>
@@ -596,41 +686,100 @@ function desenharResultados(folheando = false) {
     return;
   }
 
+  const filialAtual = obterFilialAtiva();
   const total = soComEstoque
-    ? estado.catalogo.filter((i) => i.status_estoque !== 'sem_estoque').length
+    ? estado.catalogo.filter((i) => (obterSaldoFilial(i, filialAtual) ?? 0) > 0).length
     : estado.catalogo.length;
 
-  caixa.innerHTML = `
-    ${folheando ? `<p class="minusculo suave" style="margin:8px 0 4px">
-      Mostrando ${resultadosBusca.length} de ${formatarNumero(total)} itens —
-      role a lista ou digite para filtrar.</p>` : ''}
-    <div class="rolagem" style="max-height:340px;overflow-y:auto;
-      border:1px solid var(--cor-borda);border-radius:var(--raio)">
-    <table class="tabela">
-      <tbody>${resultadosBusca.map((item, i) => {
-        const est = rotuloEstoque(item.status_estoque);
-        const jaTem = itensDaCotacao.has(item.codigo_sigma);
-        return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:pointer;${
-          i === selecionado ? 'background:var(--cor-primaria-clara)' : ''}">
-          <td style="width:150px">
-            <div class="forte">${esc(item.codigo_sigma)}</div>
-            <div class="minusculo suave">${esc(item.codigo_fabricante || '')}</div>
-          </td>
-          <td>
-            <div>${esc(item.descricao)}</div>
-            <div class="minusculo" style="margin-top:2px">
-              <span class="selo selo--${est.classe}">${est.icone} ${esc(est.texto)}${
-                item.saldo != null ? ` · ${formatarNumero(item.saldo)} un.` : ''}</span>
-              ${item.st ? '<span class="selo selo--info">ST</span>' : ''}
-              ${jaTem ? '<span class="selo selo--info">já na cotação</span>' : ''}
-              ${seloHistorico(historicoDoItem(clienteId, item.codigo_sigma))}
-            </div>
-          </td>
-          <td class="valor forte" style="width:110px">${formatarBRL(item.valor_unitario_centavos)}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
-  </div>`;
+  const cabecalhoInfo = folheando ? `<p class="minusculo suave" style="margin:8px 0 6px">
+    Mostrando ${resultadosBusca.length} de ${formatarNumero(total)} itens —
+    role a lista ou digite para filtrar.</p>` : '';
+
+  if (modoVisualizacao === 'grid') {
+    caixa.innerHTML = `
+      ${cabecalhoInfo}
+      <div class="grid-produtos">
+        ${resultadosBusca.map((item) => {
+          const saldo = obterSaldoFilial(item, filialAtual);
+          const est = rotuloEstoque(classificarEstoque(saldo));
+          const esgotado = saldo !== null && saldo <= 0;
+          const jaTem = itensDaCotacao.has(item.codigo_sigma);
+          return `
+            <div class="card-produto" data-item="${esc(item.codigo_sigma)}" style="${esgotado ? 'opacity:0.85;' : ''}">
+              <div class="card-produto__topo">
+                <span class="card-produto__sku">${esc(item.codigo_sigma)}</span>
+                <span class="badge-estoque badge-estoque--${est.classe}">
+                  ${est.icone} ${esc(est.texto)} · ${saldo != null ? `${formatarNumero(saldo)} un.` : '—'}
+                </span>
+              </div>
+              <p class="card-produto__desc" title="${esc(item.descricao)}">${esc(item.descricao)}</p>
+              <div class="minusculo suave">
+                ${item.codigo_fabricante ? `Fab: ${esc(item.codigo_fabricante)}` : 'Sigma RJ'}
+                ${item.st ? ' · <span class="selo selo--info">ST</span>' : ''}
+                ${jaTem ? ' · <span class="selo selo--info">Já na cotação</span>' : ''}
+              </div>
+              <div class="card-produto__detalhes">
+                <div class="card-produto__preco">
+                  <span class="card-produto__preco-rotulo">Unitário</span>
+                  <span class="card-produto__preco-valor">${formatarBRL(item.valor_unitario_centavos)}</span>
+                </div>
+                <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--fantasma' : 'btn--primario'}"
+                        data-add="${esc(item.codigo_sigma)}"
+                        ${esgotado ? 'disabled aria-disabled="true" title="Esgotado nesta filial"' : ''}>
+                  ${esgotado ? 'Esgotado' : (jaTem ? '+ Mais um' : '+ Cotar')}
+                </button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  } else {
+    caixa.innerHTML = `
+      ${cabecalhoInfo}
+      <div class="rolagem" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:var(--radius-md)">
+      <table class="tabela tabela-ibcs">
+        <thead>
+          <tr>
+            <th style="width:140px">Código</th>
+            <th>Descrição & Disponibilidade</th>
+            <th class="col-valor" style="width:120px;text-align:right">Unitário</th>
+            <th style="width:100px;text-align:center">Ação</th>
+          </tr>
+        </thead>
+        <tbody>${resultadosBusca.map((item, i) => {
+          const saldo = obterSaldoFilial(item, filialAtual);
+          const est = rotuloEstoque(classificarEstoque(saldo));
+          const esgotado = saldo !== null && saldo <= 0;
+          const jaTem = itensDaCotacao.has(item.codigo_sigma);
+          return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:${esgotado ? 'not-allowed' : 'pointer'};${
+            i === selecionado ? 'background:var(--bg-hover)' : ''}">
+            <td style="width:140px">
+              <div class="forte">${esc(item.codigo_sigma)}</div>
+              <div class="minusculo suave">${esc(item.codigo_fabricante || '')}</div>
+            </td>
+            <td>
+              <div class="forte">${esc(item.descricao)}</div>
+              <div class="minusculo" style="margin-top:2px">
+                <span class="badge-estoque badge-estoque--${est.classe}">${est.icone} ${esc(est.texto)} · ${
+                  saldo != null ? `${formatarNumero(saldo)} un.` : '—'}</span>
+                ${item.st ? '<span class="selo selo--info">ST</span>' : ''}
+                ${jaTem ? '<span class="selo selo--info">Já na cotação</span>' : ''}
+                ${seloHistorico(historicoDoItem(clienteId, item.codigo_sigma))}
+              </div>
+            </td>
+            <td class="col-valor forte">${formatarBRL(item.valor_unitario_centavos)}</td>
+            <td style="text-align:center">
+              <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--fantasma' : 'btn--primario'}"
+                      data-add="${esc(item.codigo_sigma)}"
+                      ${esgotado ? 'disabled aria-disabled="true"' : ''}
+                      style="min-height:34px;padding:0 10px">
+                ${esgotado ? 'Esgotado' : '+ Cotar'}
+              </button>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+  }
 }
 
 /**
@@ -648,8 +797,9 @@ const LISTA_SEM_TERMO = 80;
 
 function rodarBusca(termo) {
   let base = indice;
+  const filialAtual = obterFilialAtiva();
   if (soComEstoque) {
-    base = indice.filter((i) => i.registro.status_estoque !== 'sem_estoque');
+    base = indice.filter((i) => (obterSaldoFilial(i.registro, filialAtual) ?? 0) > 0);
   }
   resultadosBusca = buscar(base, termo, termo.trim() ? 40 : LISTA_SEM_TERMO);
   selecionado = 0;
@@ -660,11 +810,19 @@ function adicionar(codigo) {
   const item = estado.catalogo.find((i) => i.codigo_sigma === codigo);
   if (!item) return;
 
-  if (item.status_estoque === 'sem_estoque') {
-    avisar(`${codigo} está sem estoque (${item.saldo ?? 0} un.). Adicionado mesmo assim — confira antes de enviar.`, 'risco', 4500);
+  const saldo = obterSaldoFilial(item);
+  if (saldo !== null && saldo <= 0) {
+    avisar(`${codigo} está esgotado no estoque desta filial (${saldo ?? 0} un.) e não pode ser cotado.`, 'risco', 4000);
+    return;
   }
+
+  if (classificarEstoque(saldo) === 'baixo') {
+    avisar(`${codigo} tem estoque baixo nesta filial (${saldo} un.).`, 'atencao', 3000);
+  }
+
   if (!itensDaCotacao.has(codigo)) itensDaCotacao.set(codigo, 1);
   salvarRascunho();
+  atualizarBadgeCarrinho();
 
   const alvo = document.getElementById('conteudo');
   redesenhar(alvo);
@@ -709,9 +867,37 @@ function ligarEventos(alvo) {
     rodarBusca(alvo.querySelector('#cot-busca').value);
   });
 
+  alvo.querySelector('#btn-vista-tabela')?.addEventListener('click', () => {
+    modoVisualizacao = 'tabela';
+    localStorage.setItem('cot_modo_visualizacao', 'tabela');
+    redesenhar(alvo);
+  });
+
+  alvo.querySelector('#btn-vista-grid')?.addEventListener('click', () => {
+    modoVisualizacao = 'grid';
+    localStorage.setItem('cot_modo_visualizacao', 'grid');
+    redesenhar(alvo);
+  });
+
+  window.addEventListener('portal:filial-mudou', () => {
+    rodarBusca(alvo.querySelector('#cot-busca')?.value || '');
+    redesenhar(alvo);
+  });
+
   alvo.querySelector('#cot-resultados')?.addEventListener('click', (e) => {
-    const linha = e.target.closest('[data-add]');
-    if (linha) adicionar(linha.dataset.add);
+    const btn = e.target.closest('[data-add]');
+    if (btn) {
+      if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+      adicionar(btn.dataset.add);
+      return;
+    }
+    const linha = e.target.closest('tr[data-add]');
+    if (linha) {
+      const item = estado.catalogo.find((i) => i.codigo_sigma === linha.dataset.add);
+      const saldo = obterSaldoFilial(item);
+      if (saldo !== null && saldo <= 0) return;
+      adicionar(linha.dataset.add);
+    }
   });
 
   // ---- seletor de cliente com busca
@@ -728,13 +914,15 @@ function ligarEventos(alvo) {
     if (!linha) return;
     clienteId = linha.dataset.cliente;
     salvarRascunho();
-    redesenhar(alvo);
+    atualizarBadgeCarrinho();
+  redesenhar(alvo);
   });
 
   alvo.querySelector('#cot-trocar-cliente')?.addEventListener('click', () => {
     clienteId = null;
     salvarRascunho();
-    redesenhar(alvo);
+    atualizarBadgeCarrinho();
+  redesenhar(alvo);
     document.getElementById('cot-cliente-busca')?.focus();
   });
 
@@ -742,7 +930,8 @@ function ligarEventos(alvo) {
     abrirFormularioCliente(null, (novo) => {
       clienteId = novo.id;          // já entra selecionado na cotação
       salvarRascunho();
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     });
   });
 
@@ -756,7 +945,8 @@ function ligarEventos(alvo) {
       const qtd = Math.max(1, Math.trunc(Number(campo.value) || 1));
       itensDaCotacao.set(campo.dataset.qtd, qtd);
       salvarRascunho();
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     });
     campo.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
@@ -767,13 +957,109 @@ function ligarEventos(alvo) {
     });
   });
 
+  alvo.querySelectorAll('[data-desc]').forEach((campo) => {
+    campo.addEventListener('change', () => {
+      const desc = Math.max(0, Math.min(100, Number(campo.value) || 0));
+      descontosDaCotacao.set(campo.dataset.desc, desc);
+      salvarRascunho();
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
+    });
+    campo.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      campo.dispatchEvent(new Event('change'));
+      const busca2 = document.getElementById('cot-busca');
+      if (busca2) { busca2.focus(); busca2.select(); }
+    });
+  });
+
+  alvo.querySelectorAll('[data-replicar-desc]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const codigo = botao.dataset.replicarDesc;
+      const desc = Number(descontosDaCotacao.get(codigo)) || 0;
+      for (const cod of itensDaCotacao.keys()) {
+        descontosDaCotacao.set(cod, desc);
+      }
+      salvarRascunho();
+      avisar(`Desconto de ${desc}% repetido para todos os ${itensDaCotacao.size} item(ns).`, 'ok');
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
+    });
+  });
+
+  function abrirModalDescontoGlobal() {
+    if (!itensDaCotacao.size) {
+      avisar('Adicione itens à cotação primeiro.', 'atencao');
+      return;
+    }
+
+    let sugestao = 0;
+    for (const [_, d] of descontosDaCotacao) {
+      if (d > 0) { sugestao = d; break; }
+    }
+
+    abrirPainel('Desconto para todos os itens', `
+      <div class="grade" style="gap:14px">
+        <p class="pequeno suave" style="margin:0">
+          Informe a porcentagem de desconto para aplicar a <strong>todos os ${itensDaCotacao.size} item(ns)</strong> da cotação:
+        </p>
+        <div>
+          <label class="rotulo" for="desc-global-val">Porcentagem de desconto (%)</label>
+          <div class="linha" style="gap:8px;align-items:center">
+            <input class="campo" id="desc-global-val" type="number" min="0" max="100" step="0.5"
+                   value="${sugestao}" style="font-size:1.15rem;font-weight:600;text-align:right;max-width:140px">
+            <span class="forte" style="font-size:1.15rem">%</span>
+          </div>
+        </div>
+        <div>
+          <span class="rotulo">Atalhos rápidos:</span>
+          <div class="linha" style="gap:6px;flex-wrap:wrap">
+            ${[0, 3, 5, 7, 10, 12, 15, 20].map((v) => `
+              <button type="button" class="btn btn--pequeno" data-atalho-desc="${v}">${v}%</button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="linha linha--fim" style="margin-top:6px;gap:8px">
+          <button class="btn btn--primario" id="desc-global-aplicar">Aplicar a todos os itens</button>
+        </div>
+      </div>
+    `);
+
+    const painel = document.querySelector('.painel');
+    const inputVal = painel?.querySelector('#desc-global-val');
+    if (inputVal) { inputVal.focus(); inputVal.select(); }
+
+    painel?.querySelectorAll('[data-atalho-desc]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (inputVal) inputVal.value = btn.dataset.atalhoDesc;
+      });
+    });
+
+    painel?.querySelector('#desc-global-aplicar')?.addEventListener('click', () => {
+      const pct = Math.max(0, Math.min(100, Number(inputVal?.value) || 0));
+      for (const cod of itensDaCotacao.keys()) {
+        descontosDaCotacao.set(cod, pct);
+      }
+      salvarRascunho();
+      document.querySelector('.painel')?.remove();
+      avisar(`Desconto de ${pct}% aplicado a todos os ${itensDaCotacao.size} item(ns).`, 'ok');
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
+    });
+  }
+
+  alvo.querySelector('#cot-aplicar-desc-todos')?.addEventListener('click', abrirModalDescontoGlobal);
+  alvo.querySelector('#cot-th-aplicar-desc')?.addEventListener('click', abrirModalDescontoGlobal);
+
   alvo.querySelectorAll('[data-repor]').forEach((botao) => {
     botao.addEventListener('click', () => {
       const codigo = botao.dataset.repor;
       const h = historicoDoItem(clienteId, codigo);
       itensDaCotacao.set(codigo, h?.quantidadeTipica || 1);
       salvarRascunho();
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     });
   });
 
@@ -784,15 +1070,18 @@ function ligarEventos(alvo) {
       if (!h) return;
       itensDaCotacao.set(codigo, h.quantidadeTipica);
       salvarRascunho();
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     });
   });
 
   alvo.querySelectorAll('[data-remover]').forEach((botao) => {
     botao.addEventListener('click', () => {
       itensDaCotacao.delete(botao.dataset.remover);
+      descontosDaCotacao.delete(botao.dataset.remover);
       salvarRascunho();
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     });
   });
 
@@ -804,7 +1093,8 @@ function ligarEventos(alvo) {
   alvo.querySelector('#cot-limpar')?.addEventListener('click', () => {
     if (!confirmar(`Limpar a cotação com ${itensDaCotacao.size} item(ns)?`)) return;
     limparCotacao();
-    redesenhar(alvo);
+    atualizarBadgeCarrinho();
+  redesenhar(alvo);
   });
 
   // `imprimir` é assíncrona: sem o catch, uma falha ao gravar o histórico
@@ -834,13 +1124,15 @@ function ligarEventos(alvo) {
 
   alvo.querySelector('#ped-auto')?.addEventListener('change', () => {
     guardarCampoPedido();
-    redesenhar(alvo);            // alterna entre campo editável e automático
+    atualizarBadgeCarrinho();
+  redesenhar(alvo);            // alterna entre campo editável e automático
   });
 
   alvo.querySelectorAll('[data-frete]').forEach((botao) =>
     botao.addEventListener('click', () => {
       pedido.gravar({ ...pedido.ler(), frete: botao.dataset.frete });
-      redesenhar(alvo);
+      atualizarBadgeCarrinho();
+  redesenhar(alvo);
     }));
 }
 
@@ -920,6 +1212,8 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
     numero: p.numero || null,
     data: cotacao.data,
     situacao,
+    total_bruto_centavos: totais.totalBruto,
+    total_desconto_centavos: totais.totalDesconto,
     total_produtos_centavos: totais.totalProdutos,
     total_ipi_centavos: totais.totalIpi,
     total_com_ipi_centavos: totais.totalComIpi,
@@ -933,6 +1227,7 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
       descricao: item.descricao,
       st: !!item.st,
       quantidade: calculo.qtd,
+      desconto_percentual: calculo.descontoPercentual || 0,
       valor_unitario_centavos: item.valor_unitario_centavos,
       ipi: item.ipi,
       valor_produtos_centavos: calculo.valorProdutos,
@@ -1009,7 +1304,9 @@ async function imprimir(alvo) {
   guardarCampoPedido();
 
   // 🔒 Sanitiza ANTES de gerar o HTML: o dado interno nunca entra na página.
-  await imprimirHTML(gerarPedidoHTML(sanitizarParaCliente(cotacao)));
+  const sanitizada = sanitizarParaCliente(cotacao);
+  const nomeArquivo = formatarNomeArquivoPDF(sanitizada);
+  await imprimirHTML(gerarPedidoHTML(sanitizada), nomeArquivo);
 
   // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
   pedido.avancarNumero();
@@ -1029,3 +1326,149 @@ document.addEventListener('keydown', (e) => {
   const busca = document.getElementById('cot-busca');
   if (busca) { e.preventDefault(); busca.focus(); busca.select(); }
 });
+
+
+export function abrirDrawerCotacao() {
+  const root = document.getElementById('drawer-cotacao-root') || document.body;
+  document.querySelector('.drawer-cotacao')?.remove();
+
+  const linhas = montarLinhas();
+  const totais = calcularTotais(linhas);
+  const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
+
+  const htmlCorpo = linhas.length ? `
+    <div style="margin-bottom:12px;padding:10px 14px;background:var(--bg-subtle);border-radius:var(--radius-md);border:1px solid var(--border-subtle)">
+      <div class="minusculo suave">Cliente Selecionado:</div>
+      <div class="forte">${esc(cliente ? cliente.nome : 'Nenhum cliente selecionado')}</div>
+      ${!cliente ? '<div class="minusculo" style="color:var(--estoque-baixo-texto);margin-top:2px">⚠️ Selecione o cliente na tela de cotações para salvar/imprimir.</div>' : ''}
+    </div>
+    <div class="grade" style="gap:10px">
+      ${linhas.map(({ item, calculo }) => {
+        const saldo = obterSaldoFilial(item);
+        const est = rotuloEstoque(classificarEstoque(saldo));
+        return `
+          <div style="padding:10px 12px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-md);display:flex;flex-direction:column;gap:6px">
+            <div class="entre" style="gap:8px">
+              <div style="flex:1;min-width:0">
+                <span class="card-produto__sku" style="font-size:11px">${esc(item.codigo_sigma)}</span>
+                <span class="forte pequeno" style="margin-left:6px">${esc(item.descricao)}</span>
+              </div>
+              <button type="button" class="btn btn--fantasma btn--pequeno" data-drawer-remover="${esc(item.codigo_sigma)}" aria-label="Remover item" style="padding:2px 8px;font-size:12px;min-height:32px">✕</button>
+            </div>
+            <div class="entre" style="align-items:center;margin-top:4px">
+              <span class="badge-estoque badge-estoque--${est.classe}" style="font-size:11px;padding:2px 6px">
+                ${est.icone} ${esc(est.texto)} · ${saldo != null ? `${formatarNumero(saldo)} un.` : '—'}
+              </span>
+              <div class="linha" style="gap:6px;align-items:center">
+                <label class="minusculo suave">Qtd:</label>
+                <input class="campo" type="number" min="1" step="1" value="${calculo.qtd}" data-drawer-qtd="${esc(item.codigo_sigma)}"
+                       style="width:68px;min-height:36px;padding:4px 8px;font-size:13px;text-align:right">
+                <span class="forte" style="font-family:var(--font-mono);font-size:13px;min-width:76px;text-align:right">${formatarBRL(calculo.valorComIpi)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : `
+    <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+      <div style="font-size:2.5rem;margin-bottom:12px">🧾</div>
+      <div class="forte">Sua cotação está vazia</div>
+      <p class="pequeno" style="margin-top:6px">Busque produtos no catálogo e adicione itens para montar sua proposta.</p>
+    </div>
+  `;
+
+  const html = `
+    <div class="drawer-cotacao" role="dialog" aria-modal="true" aria-label="Resumo da Cotação">
+      <div class="drawer-cotacao__conteudo">
+        <div class="drawer-cotacao__cabecalho">
+          <h2 class="drawer-cotacao__titulo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+            <span>Cotação (${totais.quantidadeItens} ${totais.quantidadeItens === 1 ? 'item' : 'itens'})</span>
+          </h2>
+          <button type="button" class="btn btn--fantasma btn--pequeno" id="btn-fechar-drawer" aria-label="Fechar resumo">✕</button>
+        </div>
+        <div class="drawer-cotacao__corpo">
+          ${htmlCorpo}
+        </div>
+        ${linhas.length ? `
+        <div class="drawer-cotacao__rodape">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div class="entre minusculo suave">
+              <span>Total Produtos:</span>
+              <span class="numero">${formatarBRL(totais.totalProdutos)}</span>
+            </div>
+            <div class="entre minusculo suave">
+              <span>IPI Estimado:</span>
+              <span class="numero">${formatarBRL(totais.totalIpi)}</span>
+            </div>
+            <div class="entre forte" style="font-size:var(--text-base);padding-top:4px;border-top:1px solid var(--border-subtle)">
+              <span>Total com IPI:</span>
+              <span class="numero" style="color:var(--primary-700);font-size:1.15rem">${formatarBRL(totais.totalComIpi)}</span>
+            </div>
+          </div>
+          <div class="linha" style="gap:8px;margin-top:8px">
+            <button type="button" class="btn" id="drawer-btn-salvar" style="flex:1">💾 Salvar</button>
+            <button type="button" class="btn btn--primario" id="drawer-btn-imprimir" style="flex:1">🖨️ PDF</button>
+          </div>
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  root.innerHTML = html;
+
+  const fechar = () => {
+    const elDrawer = document.querySelector('.drawer-cotacao');
+    if (elDrawer) elDrawer.remove();
+    document.removeEventListener('keydown', aoTecla);
+  };
+  const aoTecla = (e) => { if (e.key === 'Escape') fechar(); };
+
+  document.getElementById('btn-fechar-drawer')?.addEventListener('click', fechar);
+  document.querySelector('.drawer-cotacao')?.addEventListener('click', (e) => {
+    if (e.target.classList.contains('drawer-cotacao')) fechar();
+  });
+  document.addEventListener('keydown', aoTecla);
+
+  document.querySelectorAll('[data-drawer-qtd]').forEach((campo) => {
+    campo.addEventListener('change', () => {
+      const qtd = Math.max(1, Math.trunc(Number(campo.value) || 1));
+      itensDaCotacao.set(campo.dataset.drawerQtd, qtd);
+      salvarRascunho();
+      atualizarBadgeCarrinho();
+      abrirDrawerCotacao();
+      redesenhar(document.getElementById('conteudo'));
+    });
+  });
+
+  document.querySelectorAll('[data-drawer-remover]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      itensDaCotacao.delete(btn.dataset.drawerRemover);
+      descontosDaCotacao.delete(btn.dataset.drawerRemover);
+      salvarRascunho();
+      atualizarBadgeCarrinho();
+      abrirDrawerCotacao();
+      redesenhar(document.getElementById('conteudo'));
+    });
+  });
+
+  document.getElementById('drawer-btn-salvar')?.addEventListener('click', (e) => {
+    comCarregando(e.currentTarget, salvar).then(() => {
+      fechar();
+    }).catch((erro) => {
+      avisar(`Erro ao salvar: ${erro.message}`, 'risco');
+    });
+  });
+
+  document.getElementById('drawer-btn-imprimir')?.addEventListener('click', (e) => {
+    comCarregando(e.currentTarget, () => imprimir(document.getElementById('conteudo'))).then(() => {
+      fechar();
+    }).catch((erro) => {
+      avisar(`Erro ao gerar PDF: ${erro.message}`, 'risco');
+    });
+  });
+}

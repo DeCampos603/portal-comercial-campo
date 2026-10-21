@@ -1,0 +1,788 @@
+/* ==========================================================================
+   PORTAL COMERCIAL SIGMA RJ — MASTER DESIGN SYSTEM (FIGMACRAFT TOKENS)
+   Padrões Sênior de UI/UX, Vieses Cognitivos, IBCS, Tufte e WCAG 2.2 AA.
+   ========================================================================== */
+
+:root {
+  /* -------------------------------------------------------------------------
+     1. PALETA DE CORES PRIMITIVAS (LIGHT MODE BASE)
+     Medida nas identidades oficiais da M A Joaquim e Sigma RJ.
+     ------------------------------------------------------------------------- */
+  --neutral-0:    #ffffff;
+  --neutral-50:   #f8fafc;
+  --neutral-100:  #f1f5f9;
+  --neutral-150:  #e9eef4;
+  --neutral-200:  #e2e8f0;
+  --neutral-300:  #cbd5e1;
+  --neutral-400:  #94a3b8;
+  --neutral-500:  #64748b;
+  --neutral-600:  #475569;
+  --neutral-700:  #334155;
+  --neutral-800:  #1e293b;
+  --neutral-900:  #0f172a;
+  --neutral-950:  #020617;
+
+  /* Marca Sigma RJ & M A Joaquim (Azul Corporativo Industrial) */
+  --primary-50:   #f0f7ff;
+  --primary-100:  #e0effe;
+  --primary-200:  #bae0fd;
+  --primary-300:  #7cc6fb;
+  --primary-400:  #38a7f7;
+  --primary-500:  #0e8ce6;
+  --primary-600:  #026ec4;
+  --primary-700:  #084f87; /* Cor da Marca Oficial */
+  --primary-800:  #074474;
+  --primary-900:  #0c3960;
+  --primary-950:  #08243f;
+
+  /* -------------------------------------------------------------------------
+     2. SEMÁFORO DE ESTOQUE POR FILIAL (REQUISITO CANÔNICO DE DOMÍNIO)
+     - Disponível (> 10 un): Verde (#4ade80)
+     - Estoque Baixo (1 a 10 un): Amarelo (#facc15)
+     - Esgotado (0 un): Vermelho (#f87171) com desabilitação de compra
+     ------------------------------------------------------------------------- */
+  --estoque-disponivel:       #4ade80;
+  --estoque-disponivel-fundo: rgba(74, 222, 128, 0.16);
+  --estoque-disponivel-borda: rgba(74, 222, 128, 0.45);
+  --estoque-disponivel-texto: #15803d;
+
+  --estoque-baixo:            #facc15;
+  --estoque-baixo-fundo:      rgba(250, 204, 21, 0.16);
+  --estoque-baixo-borda:      rgba(250, 204, 21, 0.45);
+  --estoque-baixo-texto:      #a16207;
+
+  --estoque-esgotado:         #f87171;
+  --estoque-esgotado-fundo:   rgba(248, 113, 113, 0.16);
+  --estoque-esgotado-borda:   rgba(248, 113, 113, 0.45);
+  --estoque-esgotado-texto:   #b91c1c;
+
+  /* -------------------------------------------------------------------------
+     3. TOKENS SEMÂNTICOS DE SUPERFÍCIE, TEXTO E BORDA
+     ------------------------------------------------------------------------- */
+  --bg-canvas:          var(--neutral-100);
+  --bg-surface:         var(--neutral-0);
+  --bg-elevated:        var(--neutral-0);
+  --bg-subtle:          var(--neutral-50);
+  --bg-hover:           var(--neutral-150);
+
+  --text-primary:       var(--neutral-900);
+  --text-secondary:     var(--neutral-700);
+  --text-muted:         var(--neutral-500);
+  --text-disabled:      var(--neutral-400);
+  --text-inverse:       var(--neutral-0);
+
+  --border-subtle:      var(--neutral-200);
+  --border-strong:      var(--neutral-300);
+  --border-focus:       var(--primary-500);
+
+  /* -------------------------------------------------------------------------
+     4. TIPOGRAFIA FLUIDA (WCAG 2.2 AA & CLAMP DINÂMICO)
+     Adaptação suave de 360px a 1860px sem saltos de quebra de linha.
+     ------------------------------------------------------------------------- */
+  --font-sans:   'Segoe UI Variable Text', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-title:  'Segoe UI Variable Display', var(--font-sans);
+  --font-mono:   ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-xs:     clamp(0.75rem, 0.70rem + 0.25vw, 0.8125rem); /* 12px -> 13px */
+  --text-sm:     clamp(0.8125rem, 0.78rem + 0.16vw, 0.875rem); /* 13px -> 14px */
+  --text-base:   clamp(0.9375rem, 0.90rem + 0.19vw, 1rem);     /* 15px -> 16px */
+  --text-md:     clamp(1rem, 0.95rem + 0.25vw, 1.0625rem);     /* 16px -> 17px */
+  --text-lg:     clamp(1.125rem, 1.05rem + 0.38vw, 1.25rem);    /* 18px -> 20px */
+  --text-xl:     clamp(1.25rem, 1.15rem + 0.50vw, 1.5rem);      /* 20px -> 24px */
+  --text-2xl:    clamp(1.5rem, 1.35rem + 0.75vw, 1.875rem);     /* 24px -> 30px */
+
+  --font-weight-regular: 400;
+  --font-weight-medium:  500;
+  --font-weight-semibold:600;
+  --font-weight-bold:    700;
+
+  /* -------------------------------------------------------------------------
+     5. ESCALA ESPACIAL MODULAR (GRADE DE 4px / 8px)
+     ------------------------------------------------------------------------- */
+  --space-1:  0.25rem; /*  4px */
+  --space-2:  0.5rem;  /*  8px */
+  --space-3:  0.75rem; /* 12px */
+  --space-4:  1rem;    /* 16px */
+  --space-5:  1.25rem; /* 20px */
+  --space-6:  1.5rem;  /* 24px */
+  --space-8:  2rem;    /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
+
+  /* -------------------------------------------------------------------------
+     6. FORMA E SOMBRAS FÍSICAS SUAVES
+     ------------------------------------------------------------------------- */
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  --shadow-sm:   0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md:   0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg:   0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+  --shadow-xl:   0 20px 25px -5px rgba(15, 23, 42, 0.10), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  --focus-ring:  0 0 0 3px rgba(14, 140, 230, 0.28);
+
+  /* Curvas e tempos de transição (Micro-interações 60fps) */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit:   cubic-bezier(0.7, 0, 0.84, 0);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+
+  --header-height: 60px;
+  --bottom-nav-height: 64px;
+}
+
+/* ---------------------------------------------------------------------------
+   DARK MODE NATIVO ELEGANTE (BAIXA FADIGA OCULAR EM RUA/NOITE)
+   --------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-canvas:          #0b0f15;
+    --bg-surface:         #131922;
+    --bg-elevated:        #1a222e;
+    --bg-subtle:          #161e2a;
+    --bg-hover:           #212c3b;
+
+    --text-primary:       #f1f5f9;
+    --text-secondary:     #cbd5e1;
+    --text-muted:         #94a3b8;
+    --text-disabled:      #64748b;
+    --text-inverse:       #0b0f15;
+
+    --border-subtle:      #1f2937;
+    --border-strong:      #334155;
+    --border-focus:       var(--primary-400);
+
+    --primary-700:        var(--primary-400);
+    --primary-800:        var(--primary-500);
+
+    --estoque-disponivel-texto: #86efac;
+    --estoque-baixo-texto:      #fde047;
+    --estoque-esgotado-texto:   #fca5a5;
+
+    --shadow-sm:   0 1px 2px 0 rgba(0, 0, 0, 0.45);
+    --shadow-md:   0 4px 6px -1px rgba(0, 0, 0, 0.55), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+    --shadow-lg:   0 10px 15px -3px rgba(0, 0, 0, 0.65), 0 4px 6px -4px rgba(0, 0, 0, 0.45);
+    --shadow-xl:   0 20px 25px -5px rgba(0, 0, 0, 0.75), 0 8px 10px -6px rgba(0, 0, 0, 0.55);
+    --focus-ring:  0 0 0 3px rgba(56, 167, 247, 0.35);
+  }
+}
+
+/* ==========================================================================
+   RESET & BLINDAGEM MOBILE-FIRST (ZERO HORIZONTAL SCROLL)
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden; /* Blindagem estrita contra estouro horizontal */
+}
+
+/* ==========================================================================
+   SISTEMA DE BOTÕES (7 ESTADOS & LEI DE FITTS)
+   display: inline-flex; align-items: center; justify-content: center;
+   gap: 0.5rem; white-space: nowrap; line-height: 1;
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  line-height: 1;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--duration-fast) var(--ease-spring),
+              border-color var(--duration-fast) var(--ease-spring),
+              transform var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-spring),
+              color var(--duration-fast) var(--ease-spring);
+}
+
+/* Estado 1: Idle (definido acima) */
+
+/* Estado 2: Hover */
+.btn:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--bg-hover);
+  border-color: var(--neutral-400);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Estado 3: Active */
+.btn:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Estado 4: Focus-Visible */
+.btn:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+/* Estado 5: Loading (aria-busy="true") com Trava de Duplo Clique */
+.btn[aria-busy="true"] {
+  color: transparent !important;
+  pointer-events: none !important;
+  cursor: wait !important;
+  opacity: 0.95;
+}
+
+.btn[aria-busy="true"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-giro 0.65s linear infinite;
+}
+
+@keyframes spinner-giro {
+  to { transform: rotate(360deg); }
+}
+
+/* Estado 6: Disabled */
+.btn:disabled,
+.btn[aria-disabled="true"],
+.btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  background: var(--bg-subtle) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-disabled) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Estado 7: Success & Error Variants */
+.btn--primario {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  color: #ffffff !important;
+}
+.btn--primario:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--primary-800);
+  border-color: var(--primary-800);
+}
+
+.btn--sucesso {
+  background: var(--estoque-disponivel-fundo);
+  border-color: var(--estoque-disponivel-borda);
+  color: var(--estoque-disponivel-texto);
+}
+.btn--sucesso:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(74, 222, 128, 0.28);
+}
+
+.btn--erro,
+.btn--risco {
+  background: var(--estoque-esgotado-fundo);
+  border-color: var(--estoque-esgotado-borda);
+  color: var(--estoque-esgotado-texto);
+}
+.btn--erro:hover:not(:disabled):not([aria-disabled="true"]),
+.btn--risco:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(248, 113, 113, 0.28);
+}
+
+.btn--fantasma {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+.btn--fantasma:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--bg-hover);
+  border-color: transparent;
+  color: var(--text-primary);
+}
+
+.btn--pequeno {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+}
+
+/* ==========================================================================
+   SEMÁFORO DE ESTOQUE POR FILIAL (BADGES VISUAIS)
+   ========================================================================== */
+.badge-estoque {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: background-color var(--duration-fast) ease;
+}
+
+.badge-estoque::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* 🟢 Disponível (> 10 un) */
+.badge-estoque--disponivel {
+  background: var(--estoque-disponivel-fundo);
+  border-color: var(--estoque-disponivel-borda);
+  color: var(--estoque-disponivel-texto);
+}
+.badge-estoque--disponivel::before {
+  background: var(--estoque-disponivel);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+}
+
+/* 🟡 Estoque Baixo (1 a 10 un) */
+.badge-estoque--baixo {
+  background: var(--estoque-baixo-fundo);
+  border-color: var(--estoque-baixo-borda);
+  color: var(--estoque-baixo-texto);
+}
+.badge-estoque--baixo::before {
+  background: var(--estoque-baixo);
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.3);
+}
+
+/* 🔴 Esgotado (0 un) */
+.badge-estoque--esgotado {
+  background: var(--estoque-esgotado-fundo);
+  border-color: var(--estoque-esgotado-borda);
+  color: var(--estoque-esgotado-texto);
+}
+.badge-estoque--esgotado::before {
+  background: var(--estoque-esgotado);
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.3);
+}
+
+/* ==========================================================================
+   HEADER MODERNO COM FILIAL, BUSCA & CARRINHO COM BADGE
+   ========================================================================== */
+.cabecalho-principal {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--header-height);
+  padding: 0 var(--space-4);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.cabecalho-marca {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+
+.seletor-filial-wrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.seletor-filial {
+  appearance: none;
+  min-height: 40px;
+  padding: 0 32px 0 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+.seletor-filial:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.seletor-filial-icone {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: var(--text-muted);
+}
+
+/* Botão de Carrinho de Cotação com Badge */
+.btn-carrinho {
+  position: relative;
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.badge-contagem {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--primary-700);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+.badge-contagem:empty,
+.badge-contagem[data-count="0"] {
+  display: none;
+}
+.badge-contagem.animar-pulso {
+  animation: pulso-badge 0.35s var(--ease-spring);
+}
+@keyframes pulso-badge {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* ==========================================================================
+   TABELAS DE PREÇOS & CATÁLOGO (IBCS + TUFTE PRINCIPLES)
+   Zero linhas verticais, cabeçalho sticky, divisores horizontais sutis,
+   números e valores monetários à direita com tabular-nums.
+   ========================================================================== */
+.tabela-ibcs {
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+  font-size: var(--text-sm);
+}
+
+.tabela-ibcs th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-subtle);
+  border-bottom: 2px solid var(--border-strong);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.tabela-ibcs td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  vertical-align: middle;
+}
+
+.tabela-ibcs tbody tr {
+  transition: background-color var(--duration-fast) ease;
+}
+
+.tabela-ibcs tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.tabela-ibcs .col-valor,
+.tabela-ibcs td.col-valor,
+.tabela-ibcs th.col-valor,
+.tabela-ibcs td.valor {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   GRID RESPONSIVO DE CARDS DE PRODUTO (CATÁLOGO MODERNO)
+   ========================================================================== */
+.grid-produtos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.card-produto {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-spring),
+              border-color var(--duration-fast) var(--ease-spring);
+  position: relative;
+}
+
+.card-produto:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.card-produto__topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.card-produto__sku {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-700);
+  background: var(--primary-50);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--primary-200);
+}
+
+.card-produto__desc {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.8em;
+}
+
+.card-produto__detalhes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.card-produto__preco {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-produto__preco-rotulo {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.card-produto__preco-valor {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   DRAWER / CARRINHO DE COTAÇÃO (BOTTOM SHEET EM MOBILE <= 768px)
+   ========================================================================== */
+.drawer-cotacao {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  transition: opacity var(--duration-normal) ease;
+  animation: fade-in var(--duration-normal) ease;
+}
+
+.drawer-cotacao__conteudo {
+  width: min(540px, 100vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-xl);
+  animation: deslizar-direita var(--duration-normal) var(--ease-spring);
+}
+
+.drawer-cotacao__cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.drawer-cotacao__titulo {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.drawer-cotacao__corpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.drawer-cotacao__rodape {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@keyframes deslizar-direita {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes deslizar-baixo {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Adaptação Bottom Sheet em Telas Móveis (<= 768px) */
+@media (max-width: 768px) {
+  .drawer-cotacao {
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .drawer-cotacao__conteudo {
+    width: 100%;
+    max-height: 90dvh; /* Bottom Sheet fluida */
+    height: auto;
+    border-left: none;
+    border-top: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation-name: deslizar-baixo;
+  }
+
+  .drawer-cotacao__cabecalho {
+    padding: var(--space-3) var(--space-4);
+    position: relative;
+  }
+
+  /* Puxador táctil no topo do Bottom Sheet */
+  .drawer-cotacao__cabecalho::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: var(--radius-full);
+    background: var(--border-strong);
+  }
+
+  .drawer-cotacao__corpo {
+    padding: var(--space-4);
+  }
+
+  .drawer-cotacao__rodape {
+    padding: var(--space-4);
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  }
+}
+
+/* ==========================================================================
+   ADAPTAÇÃO MOBILE-FIRST (ÁREAS MÍNIMAS DE TOQUE >= 48px)
+   ========================================================================== */
+@media (max-width: 768px), (pointer: coarse) {
+  .btn,
+  .campo,
+  .seletor-filial,
+  .cartao-acao,
+  label.linha {
+    min-height: 48px !important;
+  }
+
+  .btn--pequeno {
+    min-height: 44px !important;
+    padding: 0 var(--space-3);
+  }
+
+  .cabecalho-principal {
+    padding: 0 var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .grid-produtos {
+    grid-template-columns: 1fr; /* Coluna única no celular */
+    gap: var(--space-3);
+  }
+}

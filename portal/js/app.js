@@ -11,7 +11,7 @@ import { formatarDataHora, formatarData, diasDesde } from './nucleo/moeda.js';
 import { icone } from './nucleo/ui.js';
 import { DIAS_ATE_TABELA_VELHA, DISPARADOR_HABILITADO } from './config.js';
 
-import { montarCotacoes } from './cotacoes/tela.js';
+import { montarCotacoes, abrirDrawerCotacao, atualizarBadgeCarrinho, obterFilialAtiva, definirFilialAtiva } from './cotacoes/tela.js';
 import { montarHistorico } from './cotacoes/historico.js';
 import { montarCarteira } from './carteira/tela.js';
 import { montarMapa } from './mapa/tela.js';
@@ -209,13 +209,38 @@ function faixaDaTabela() {
 async function iniciarPortal() {
   mostrar('portal');
   montarAbas();
+
+  // Conectar Seletor de Filial do Header
+  const seletorFilial = el('seletor-filial');
+  if (seletorFilial) {
+    seletorFilial.value = obterFilialAtiva();
+    seletorFilial.addEventListener('change', (e) => {
+      definirFilialAtiva(e.target.value);
+      window.dispatchEvent(new CustomEvent('portal:filial-mudou', { detail: { filial: e.target.value } }));
+    });
+  }
+
+  // Conectar Botão de Carrinho no Header
+  const btnCarrinhoHeader = el('btn-carrinho-header');
+  if (btnCarrinhoHeader) {
+    btnCarrinhoHeader.addEventListener('click', () => {
+      abrirDrawerCotacao();
+    });
+  }
+
+  atualizarBadgeCarrinho();
+
   if (!location.hash) location.hash = SECOES[0].hash;
   rotear();
 
-  aoMudar(() => { atualizarIndicador(); });
+  aoMudar(() => {
+    atualizarIndicador();
+    atualizarBadgeCarrinho();
+  });
   atualizarIndicador();
 
   await carregar();
+  atualizarBadgeCarrinho();
   rotear();                   // redesenha com os dados já em mãos
 }
 

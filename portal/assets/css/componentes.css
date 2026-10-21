@@ -568,6 +568,9 @@ label.linha { cursor: pointer; user-select: none; }
 .selo--atencao { background: var(--atencao-fundo); border-color: var(--atencao-borda); color: var(--atencao-forte); }
 .selo--risco   { background: var(--risco-fundo);   border-color: var(--risco-borda);   color: var(--risco-forte); }
 .selo--info    { background: var(--info-fundo);    border-color: var(--info-borda);    color: var(--info-forte); }
+.selo--disponivel { background: var(--estoque-disponivel-fundo); border-color: var(--estoque-disponivel-borda); color: var(--estoque-disponivel-texto); }
+.selo--baixo      { background: var(--estoque-baixo-fundo);      border-color: var(--estoque-baixo-borda);      color: var(--estoque-baixo-texto); }
+.selo--esgotado   { background: var(--estoque-esgotado-fundo);   border-color: var(--estoque-esgotado-borda);   color: var(--estoque-esgotado-texto); }
 
 .selo-estoque { font-variant-numeric: tabular-nums; }
 

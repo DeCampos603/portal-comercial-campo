@@ -16,19 +16,19 @@
 
 import { SALDO_SEM_ESTOQUE, SALDO_BAIXO } from '../config.js';
 
-/** Reproduz o semáforo da planilha. Espelha a coluna gerada no Postgres. */
+/** Reproduz o semáforo de estoque por filial (Regra Sigma RJ). */
 export function classificarEstoque(saldo) {
   if (saldo === null || saldo === undefined) return null;
-  if (saldo < SALDO_SEM_ESTOQUE) return 'sem_estoque';
-  if (saldo < SALDO_BAIXO) return 'baixo';
+  if (saldo <= SALDO_SEM_ESTOQUE) return 'sem_estoque';
+  if (saldo <= SALDO_BAIXO) return 'baixo';
   return 'ok';
 }
 
 export const ROTULO_ESTOQUE = {
-  sem_estoque: { texto: 'Sem estoque', classe: 'risco', icone: '🔴' },
-  baixo: { texto: 'Acabando', classe: 'atencao', icone: '🟡' },
-  ok: { texto: 'Disponível', classe: 'ok', icone: '🟢' },
-  null: { texto: 'Saldo desconhecido', classe: 'neutro', icone: '⬜' },
+  sem_estoque: { texto: 'Esgotado', classe: 'esgotado', icone: '🔴', cor: '#f87171' },
+  baixo: { texto: 'Estoque Baixo', classe: 'baixo', icone: '🟡', cor: '#facc15' },
+  ok: { texto: 'Disponível', classe: 'disponivel', icone: '🟢', cor: '#4ade80' },
+  null: { texto: 'Saldo desconhecido', classe: 'neutro', icone: '⬜', cor: '#94a3b8' },
 };
 
 export function rotuloEstoque(status) {
@@ -36,24 +36,40 @@ export function rotuloEstoque(status) {
 }
 
 /**
- * Calcula uma linha da cotação.
- * @param {object} item      registro do catálogo
+ * Calcula uma linha da cotação com suporte a desconto percentual individual.
+ * @param {object} item               registro do catálogo
  * @param {number} quantidade
+ * @param {number} descontoPercentual porcentagem de 0 a 100
  */
-export function calcularLinha(item, quantidade) {
+export function calcularLinha(item, quantidade, descontoPercentual = 0) {
   const qtd = Math.max(0, Math.trunc(Number(quantidade) || 0));
   const unitario = item.valor_unitario_centavos;
+  const desc = Math.max(0, Math.min(100, Number(descontoPercentual) || 0));
 
   if (unitario === null || unitario === undefined) {
-    return { qtd, valorProdutos: null, valorIpi: null, valorComIpi: null, semPreco: true };
+    return {
+      qtd,
+      descontoPercentual: desc,
+      valorBruto: null,
+      valorDesconto: null,
+      valorProdutos: null,
+      valorIpi: null,
+      valorComIpi: null,
+      semPreco: true,
+    };
   }
 
-  const valorProdutos = unitario * qtd;
+  const valorBruto = unitario * qtd;
+  const valorDesconto = Math.round(valorBruto * (desc / 100));
+  const valorProdutos = valorBruto - valorDesconto;
   // Arredonda o IPI UMA vez, aqui. Acumular fração linha a linha desvia o total.
   const valorIpi = Math.round(valorProdutos * (Number(item.ipi) || 0));
 
   return {
     qtd,
+    descontoPercentual: desc,
+    valorBruto,
+    valorDesconto,
     valorProdutos,
     valorIpi,
     valorComIpi: valorProdutos + valorIpi,
@@ -66,6 +82,8 @@ export function calcularLinha(item, quantidade) {
  * @param {Array<{item, calculo}>} linhas
  */
 export function calcularTotais(linhas) {
+  let totalBruto = 0;
+  let totalDesconto = 0;
   let totalProdutos = 0;
   let totalIpi = 0;
   let totalComIpi = 0;
@@ -77,6 +95,8 @@ export function calcularTotais(linhas) {
   for (const { item, calculo } of linhas) {
     if (calculo.semPreco) itensSemPreco += 1;
     else {
+      totalBruto += calculo.valorBruto ?? calculo.valorProdutos;
+      totalDesconto += calculo.valorDesconto ?? 0;
       totalProdutos += calculo.valorProdutos;
       totalIpi += calculo.valorIpi;
       totalComIpi += calculo.valorComIpi;
@@ -90,8 +110,15 @@ export function calcularTotais(linhas) {
 
   return {
     quantidadeItens: linhas.length,
-    totalProdutos, totalIpi, totalComIpi,
-    itensSemPreco, itensSemEstoque, itensEstoqueBaixo, itensAcimaDoSaldo,
+    totalBruto,
+    totalDesconto,
+    totalProdutos,
+    totalIpi,
+    totalComIpi,
+    itensSemPreco,
+    itensSemEstoque,
+    itensEstoqueBaixo,
+    itensAcimaDoSaldo,
   };
 }
 

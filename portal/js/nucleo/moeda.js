@@ -16,7 +16,9 @@ const FORMATADOR_NUMERO = new Intl.NumberFormat('pt-BR');
 /** Centavos (inteiro) → "R$ 1.234,56". Ausência vira travessão, nunca R$ 0,00. */
 export function formatarBRL(centavos) {
   if (centavos === null || centavos === undefined || Number.isNaN(centavos)) return '—';
-  return FORMATADOR_BRL.format(centavos / 100);
+  // Blindagem estrita contra -R$ 0,00 e resíduos de ponto flutuante
+  const valor = Math.abs(centavos / 100) < 0.0001 ? 0 : (centavos / 100);
+  return FORMATADOR_BRL.format(valor);
 }
 
 /** Número inteiro com separador de milhar. */
