@@ -49,10 +49,23 @@ export function esperarImagens(raiz, limiteMs = 3000) {
   ]);
 }
 
-/** Monta o HTML na folha, espera o que precisa ser esperado, e imprime. */
-export async function imprimirHTML(html) {
+/**
+ * Monta o HTML na folha, espera o que precisa ser esperado, e imprime.
+ * @param {string} html
+ * @param {string} nomeArquivo Sugestão de nome para o arquivo PDF gerado pelo navegador
+ */
+export async function imprimirHTML(html, nomeArquivo = '') {
   const area = areaImpressao();
   area.innerHTML = html;
   await esperarImagens(area);
-  window.print();
+
+  const tituloOriginal = document.title;
+  try {
+    if (nomeArquivo) {
+      document.title = nomeArquivo;
+    }
+    window.print();
+  } finally {
+    document.title = tituloOriginal;
+  }
 }

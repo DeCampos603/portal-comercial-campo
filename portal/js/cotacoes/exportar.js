@@ -11,7 +11,7 @@
  * número chutado é problema.
  */
 
-import { formatarBRL, formatarPercentual, formatarData } from '../nucleo/moeda.js';
+import { formatarBRL, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
 import { esc } from '../nucleo/ui.js';
 import { formatarCNPJ } from '../carteira/formulario.js';
 import { LOGO_SIBB, LOGO_MAJOAQUIM } from './logos.js';
@@ -21,22 +21,45 @@ const ou = (valor, largura = '120px') => (String(valor ?? '').trim()
   ? esc(valor)
   : `<span style="display:inline-block;min-width:${largura};border-bottom:1px solid #999">&nbsp;</span>`);
 
+/**
+ * Formata um nome de arquivo inteligente e padronizado para salvar em PDF.
+ * Exemplo: `Pedido_0042_FastCar_Oficina_2026-09-11`
+ */
+export function formatarNomeArquivoPDF(cotacao) {
+  const ped = cotacao?.pedido ?? {};
+  const numeroBruto = String(ped.numero || '').trim();
+  const numero = numeroBruto ? numeroBruto.replace(/[^a-zA-Z0-9_-]/g, '_') : 'SemNumero';
+  const clienteNome = String(cotacao?.cliente?.nome || 'Cliente')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 24);
+  const data = String(cotacao?.data || hojeISO()).replace(/[^0-9-]/g, '');
+  return `Pedido_${numero}_${clienteNome || 'Cliente'}_${data}`;
+}
+
 export function gerarPedidoHTML(cotacao) {
   const { cliente, linhas, totais } = cotacao;
   const emp = cotacao.empresa ?? {};
   const ped = cotacao.pedido ?? {};
 
+  const temDesconto = linhas.some(({ calculo }) => (calculo.descontoPercentual || 0) > 0);
+  const totalPecas = linhas.reduce((acc, { calculo }) => acc + (Number(calculo.qtd) || 0), 0);
+
   const itens = linhas.map(({ item, calculo }, i) => `
     <tr>
-      <td>${i + 1}</td>
-      <td>${esc(item.codigo_fabricante || '')}</td>
-      <td>${esc(item.codigo_sigma)}</td>
-      <td>${esc(item.descricao)}${item.st ? ' <strong>(ST)</strong>' : ''}</td>
-      <td style="text-align:right">${calculo.qtd}</td>
-      <td style="text-align:right">${formatarPercentual(item.ipi)}</td>
-      <td style="text-align:right">${formatarBRL(item.valor_unitario_centavos)}</td>
-      <td style="text-align:right">${formatarBRL(calculo.valorProdutos)}</td>
-      <td style="text-align:right">${formatarBRL(calculo.valorComIpi)}</td>
+      <td class="col-item">${i + 1}</td>
+      <td class="col-cod">${esc(item.codigo_fabricante || '')}</td>
+      <td class="col-sigma">${esc(item.codigo_sigma)}</td>
+      <td class="col-desc">${esc(item.descricao)}${item.st ? ' <span class="pedido__selo-st">ST</span>' : ''}</td>
+      <td class="col-qtd" style="text-align:right">${calculo.qtd}</td>
+      <td class="col-ipi" style="text-align:right">${formatarPercentual(item.ipi)}</td>
+      <td class="col-unit" style="text-align:right">${formatarBRL(item.valor_unitario_centavos)}</td>
+      ${temDesconto ? `<td class="col-desc-pct" style="text-align:right">${calculo.descontoPercentual ? `${calculo.descontoPercentual}%` : '—'}</td>` : ''}
+      <td class="col-prod" style="text-align:right">${formatarBRL(calculo.valorProdutos)}</td>
+      <td class="col-total" style="text-align:right">${formatarBRL(calculo.valorComIpi)}</td>
     </tr>`).join('');
 
   const temST = linhas.some(({ item }) => item.st);
@@ -55,12 +78,15 @@ export function gerarPedidoHTML(cotacao) {
           ${esc(emp.telefone || '')}${emp.telefone && emp.email ? ' · ' : ''}${esc(emp.email || '')}
         </div>` : ''}
       </div>
-      <div style="text-align:right;font-size:9pt">
+      <div class="pedido__meta">
         ${LOGO_SIBB ? `<img src="${LOGO_SIBB}" alt=""
              style="height:30px;margin-bottom:6px;display:inline-block">` : ''}
-        <div><strong>Pedido nº</strong> ${ou(ped.numero, '90px')}</div>
-        <div><strong>Data:</strong> ${formatarData(cotacao.data)}</div>
-        <div><strong>Vendedor:</strong> ${esc(cotacao.vendedor || '')}</div>
+        <div class="pedido__numero-box">
+          <span class="pedido__numero-rotulo">Pedido nº</span>
+          <span class="pedido__numero-valor">${ou(ped.numero, '90px')}</span>
+        </div>
+        <div class="pedido__meta-linha"><strong>Data:</strong> ${formatarData(cotacao.data)}</div>
+        <div class="pedido__meta-linha"><strong>Vendedor:</strong> ${esc(cotacao.vendedor || '')}</div>
       </div>
     </div>
 
@@ -100,20 +126,43 @@ export function gerarPedidoHTML(cotacao) {
     <table class="tabela">
       <thead>
         <tr>
-          <th>Item</th><th>Código</th><th>Cód. Sigma</th><th>Compatibilidade / Descrição</th>
-          <th style="text-align:right">Qtd.</th><th style="text-align:right">IPI</th>
-          <th style="text-align:right">Vlr. Unit.</th>
-          <th style="text-align:right">Vlr. Produtos</th>
-          <th style="text-align:right">Vlr. c/ IPI</th>
+          <th class="col-item">Item</th>
+          <th class="col-cod">Código</th>
+          <th class="col-sigma">Cód. Sigma</th>
+          <th class="col-desc">Compatibilidade / Descrição</th>
+          <th class="col-qtd" style="text-align:right">Qtd.</th>
+          <th class="col-ipi" style="text-align:right">IPI</th>
+          <th class="col-unit" style="text-align:right">Vlr. Unit.</th>
+          ${temDesconto ? '<th class="col-desc-pct" style="text-align:right">Desc.</th>' : ''}
+          <th class="col-prod" style="text-align:right">Vlr. Produtos</th>
+          <th class="col-total" style="text-align:right">Vlr. c/ IPI</th>
         </tr>
       </thead>
       <tbody>${itens}</tbody>
     </table>
 
     <div class="bloco-total">
-      <table>
+      <div class="bloco-total__resumo">
+        <div class="bloco-total__resumo-titulo">Resumo de Volumes</div>
+        <div class="bloco-total__resumo-detalhe">
+          <span><strong>${totais.quantidadeItens}</strong> item(ns)</span>
+          <span class="divisor-ponto">·</span>
+          <span><strong>${totalPecas}</strong> peça(s)</span>
+        </div>
+      </div>
+
+      <table class="bloco-total__tabela">
+        ${totais.totalDesconto ? `
         <tr>
-          <td>Valor Total dos Produtos</td>
+          <td>Valor Bruto dos Produtos</td>
+          <td style="text-align:right">${formatarBRL(totais.totalBruto)}</td>
+        </tr>
+        <tr class="linha-desconto">
+          <td>Desconto Comercial</td>
+          <td style="text-align:right">- ${formatarBRL(totais.totalDesconto)}</td>
+        </tr>` : ''}
+        <tr>
+          <td>Valor Total dos Produtos${totais.totalDesconto ? ' (Líquido)' : ''}</td>
           <td style="text-align:right">${formatarBRL(totais.totalProdutos)}</td>
         </tr>
         <tr>
@@ -127,28 +176,43 @@ export function gerarPedidoHTML(cotacao) {
       </table>
     </div>
 
-    <div style="margin-top:16px;font-size:9pt;line-height:1.9">
-      <div><strong>Condições de pagamento:</strong> ${ou(ped.condicoesPagamento, '220px')}</div>
-      <div><strong>Prazo de entrega:</strong> ${ou(ped.prazoEntrega, '180px')}</div>
-      <div><strong>Validade da cotação:</strong> ${ou(cotacao.validade, '200px')}</div>
-      ${ped.frete?.trim() ? `<div><strong>Frete:</strong> ${esc(ped.frete)}</div>` : ''}
+    <div class="pedido__condicoes">
+      <div class="pedido__cond-card">
+        <div class="pedido__cond-rotulo">Condições de Pagamento</div>
+        <div class="pedido__cond-valor">${ou(ped.condicoesPagamento, '160px')}</div>
+      </div>
+      <div class="pedido__cond-card">
+        <div class="pedido__cond-rotulo">Prazo de Entrega</div>
+        <div class="pedido__cond-valor">${ou(ped.prazoEntrega, '140px')}</div>
+      </div>
+      <div class="pedido__cond-card">
+        <div class="pedido__cond-rotulo">Validade da Cotação</div>
+        <div class="pedido__cond-valor">${ou(cotacao.validade, '140px')}</div>
+      </div>
+      <div class="pedido__cond-card">
+        <div class="pedido__cond-rotulo">Frete</div>
+        <div class="pedido__cond-valor">${ou(ped.frete, '140px')}</div>
+      </div>
     </div>
 
     ${cotacao.observacoes ? `
-    <div style="margin-top:12px;font-size:9pt">
-      <strong>OBSERVAÇÕES</strong>
-      <div style="white-space:pre-wrap;border:1px solid #999;padding:6px;margin-top:4px;min-height:40px">${esc(cotacao.observacoes)}</div>
+    <div class="pedido__observacoes">
+      <div class="pedido__obs-titulo">Observações</div>
+      <div class="pedido__obs-corpo">${esc(cotacao.observacoes)}</div>
     </div>` : ''}
 
     ${temST ? `
-    <p style="margin-top:10px;font-size:8pt;font-style:italic">
-      Itens assinalados com (ST) estão sujeitos a apuração de Substituição Tributária —
-      consultar a Sigma.
-    </p>` : ''}
+    <div class="pedido__aviso-st">
+      ℹ️ Itens assinalados com <strong>ST</strong> estão sujeitos a apuração de Substituição Tributária — consultar a Sigma.
+    </div>` : ''}
 
     <div class="assinaturas">
       <div>Responsável pela Aprovação — Representante</div>
       <div>Autorização Sigma</div>
+    </div>
+
+    <div class="pedido__rodape-doc">
+      Documento comercial emitido via Portal Comercial Sigma · M A JOAQUIM REPRESENTAÇÃO
     </div>
   </div>`;
 }

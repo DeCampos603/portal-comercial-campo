@@ -18,7 +18,7 @@ import { esc, vazio, avisar, confirmar, abrirPainel, comCarregando } from '../nu
 import { formatarBRL, formatarData, formatarPercentual, hojeISO } from '../nucleo/moeda.js';
 import { validadeCotacao } from '../nucleo/diasUteis.js';
 import { criarIndice, buscar } from '../nucleo/busca.js';
-import { gerarPedidoHTML } from './exportar.js';
+import { gerarPedidoHTML, formatarNomeArquivoPDF } from './exportar.js';
 import { imprimirHTML } from './impressao.js';
 import { carregarNaCotacao } from './tela.js';
 
@@ -363,6 +363,7 @@ function ligar(alvo) {
 function abrirFicha(c) {
   const itens = c.itens ?? [];
   const cond = c.condicoes ?? {};
+  const temDesc = itens.some((i) => (i.desconto_percentual || 0) > 0);
 
   abrirPainel(`${c.numero || 'Cotação'} — ${c.nome_cliente || ''}`, `
     <div class="grade" style="gap:12px">
@@ -383,6 +384,7 @@ function abrirFicha(c) {
             <th>Código</th><th>Descrição</th>
             <th style="text-align:right">Qtd</th>
             <th style="text-align:right">Unitário</th>
+            ${temDesc ? '<th style="text-align:right">Desc. %</th>' : ''}
             <th style="text-align:right">IPI</th>
             <th style="text-align:right">c/ IPI</th>
           </tr></thead>
@@ -391,6 +393,7 @@ function abrirFicha(c) {
             <td class="pequeno">${esc(i.descricao || '')}</td>
             <td style="text-align:right">${i.quantidade}</td>
             <td style="text-align:right">${formatarBRL(i.valor_unitario_centavos)}</td>
+            ${temDesc ? `<td style="text-align:right">${i.desconto_percentual ? `${i.desconto_percentual}%` : '—'}</td>` : ''}
             <td style="text-align:right">${formatarPercentual(i.ipi)}</td>
             <td style="text-align:right">${formatarBRL(i.valor_com_ipi_centavos)}</td>
           </tr>`).join('')}</tbody>
@@ -398,7 +401,12 @@ function abrirFicha(c) {
       </div>
 
       <table class="tabela">
-        <tr><td class="suave">Produtos</td>
+        ${c.total_desconto_centavos ? `
+        <tr><td class="suave">Total Bruto dos Produtos</td>
+            <td class="valor">${formatarBRL(c.total_bruto_centavos ?? (c.total_produtos_centavos + c.total_desconto_centavos))}</td></tr>
+        <tr><td class="suave" style="color:var(--cor-sucesso)">Desconto Comercial</td>
+            <td class="valor" style="color:var(--cor-sucesso)">- ${formatarBRL(c.total_desconto_centavos)}</td></tr>` : ''}
+        <tr><td class="suave">Produtos${c.total_desconto_centavos ? ' (Líquido)' : ''}</td>
             <td class="valor">${formatarBRL(c.total_produtos_centavos)}</td></tr>
         <tr><td class="suave">IPI</td>
             <td class="valor">${formatarBRL(c.total_ipi_centavos)}</td></tr>
@@ -497,6 +505,10 @@ function rehidratar(c) {
     },
     calculo: {
       qtd: i.quantidade ?? 0,
+      descontoPercentual: i.desconto_percentual ?? 0,
+      valorBruto: (i.valor_unitario_centavos ?? 0) * (i.quantidade ?? 0),
+      valorDesconto: i.valor_desconto_centavos
+        ?? Math.round(((i.valor_unitario_centavos ?? 0) * (i.quantidade ?? 0)) * ((i.desconto_percentual ?? 0) / 100)),
       // Cotações antigas não guardavam o valor dos produtos. Derivar é seguro:
       // é multiplicação de dois campos que ESTÃO na fotografia, não uma
       // consulta ao preço de hoje.
@@ -522,6 +534,8 @@ function rehidratar(c) {
     cliente,
     linhas,
     totais: {
+      totalBruto: c.total_bruto_centavos ?? (c.total_produtos_centavos ?? 0) + (c.total_desconto_centavos ?? 0),
+      totalDesconto: c.total_desconto_centavos ?? 0,
       totalProdutos: c.total_produtos_centavos ?? 0,
       totalIpi: c.total_ipi_centavos ?? 0,
       totalComIpi: c.total_com_ipi_centavos ?? 0,
@@ -541,7 +555,8 @@ async function gerarPDF(c) {
     // Não passa por `sanitizarParaCliente`: a fotografia já nasceu limpa —
     // saldo, comissão e categoria nunca entraram nela. Sanitizar de novo aqui
     // daria a impressão de que o dado interno chega até este ponto.
-    await imprimirHTML(gerarPedidoHTML(rehidratar(c)));
+    const cota = rehidratar(c);
+    await imprimirHTML(gerarPedidoHTML(cota), formatarNomeArquivoPDF(cota));
   } catch (erro) {
     console.error('Falha ao regerar o PDF:', erro);
     avisar(`Não consegui gerar o PDF: ${erro.message}`, 'risco');
@@ -567,7 +582,8 @@ async function gerarPDFsEmLote(lista) {
       .sort((a, b) => String(a.data).localeCompare(String(b.data)))
       .map((c) => gerarPedidoHTML(rehidratar(c)))
       .join('');
-    await imprimirHTML(folhas);
+    const nomeArquivo = `Pedidos_Lote_${lista.length}_${hojeISO()}`;
+    await imprimirHTML(folhas, nomeArquivo);
     avisar(`${lista.length} pedido(s) no documento.`, 'ok');
   } catch (erro) {
     console.error('Falha ao gerar os PDFs em lote:', erro);
