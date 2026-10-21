@@ -100,12 +100,17 @@ function destruir() {
  *    sendo lido. Um documento se imprime em papel branco independente da cor
  *    da mesa. Legibilidade ganha de harmonia cromática aqui.
  */
+/**
+ * Base do mapa — OpenStreetMap Standard (Livre de chaves de API, público e sem marca d'água).
+ *
+ * Utiliza o servidor oficial tile.openstreetmap.org que não requer tokens nem chaves pagas,
+ * garantindo estabilidade e visualização nítida de vias e pontos de interesse em campo.
+ */
 const BASE_CLARA =
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 const ATRIBUICAO =
-  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
-  + ' · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+  '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 
 function criarMapa() {
   mapa = L.map('mapa-tela', {
@@ -117,9 +122,7 @@ function criarMapa() {
 
   L.tileLayer(BASE_CLARA, {
     attribution: ATRIBUICAO,
-    subdomains: 'abcd',
-    maxZoom: 20,
-    detectRetina: true,
+    maxZoom: 19,
   }).addTo(mapa);
 
   camadaPinos = L.layerGroup().addTo(mapa);

@@ -366,29 +366,30 @@ function desenharClientes(termo) {
 }
 
 function blocoBusca() {
-  return `<div class="cartao" style="margin-bottom:12px">
+  return `<div class="cartao" style="margin-bottom:12px;width:100%">
     <div class="cartao__corpo" style="padding:12px 16px">
-      <div class="linha" style="gap:12px;flex-wrap:wrap">
-        <div class="campo-busca" style="flex:1;min-width:220px">
+      <div class="linha" style="gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <div class="campo-busca" style="flex:1;min-width:240px">
           <input class="campo" id="cot-busca" type="search" autocomplete="off"
                  placeholder="Buscar por código Sigma, código do fabricante ou descrição…"
                  aria-label="Buscar item" aria-describedby="cot-dica">
         </div>
-        <div class="linha" style="gap:8px;align-items:center">
-          <label class="linha pequeno" style="gap:6px;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" id="cot-so-estoque" ${soComEstoque ? 'checked' : ''}>
-          Só com estoque
-        <div class="linha" style="gap:2px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px;background:var(--bg-subtle)">
-          <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'tabela' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-tabela" title="Visualização em tabela IBCS" style="min-height:34px;padding:0 8px">☰ Tabela</button>
-          <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'grid' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-grid" title="Visualização em grade de cards" style="min-height:34px;padding:0 8px">⊞ Cards</button>
+        <div class="linha" style="gap:12px;align-items:center;flex-shrink:0">
+          <label class="linha pequeno" style="gap:6px;cursor:pointer;white-space:nowrap;margin:0">
+            <input type="checkbox" id="cot-so-estoque" ${soComEstoque ? 'checked' : ''}>
+            <span>Só com estoque</span>
+          </label>
+          <div class="linha" style="gap:2px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px;background:var(--bg-subtle)">
+            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'tabela' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-tabela" title="Visualização em tabela IBCS" style="min-height:34px;padding:0 10px">☰ Tabela</button>
+            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'grid' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-grid" title="Visualização em grade de cards" style="min-height:34px;padding:0 10px">⊞ Cards</button>
+          </div>
         </div>
-        </label>
       </div>
-      <p class="minusculo suave" id="cot-dica" style="margin:6px 0 0">
+      <p class="minusculo suave" id="cot-dica" style="margin:8px 0 0">
         <kbd>/</kbd> foca a busca · <kbd>↑</kbd><kbd>↓</kbd> navega ·
         <kbd>Enter</kbd> adiciona e pula para a quantidade
       </p>
-      <div id="cot-resultados" style="margin-top:8px"></div>
+      <div id="cot-resultados" style="margin-top:12px;width:100%"></div>
     </div>
   </div>`;
 }
@@ -698,7 +699,7 @@ function desenharResultados(folheando = false) {
   if (modoVisualizacao === 'grid') {
     caixa.innerHTML = `
       ${cabecalhoInfo}
-      <div class="grid-produtos">
+      <div class="grid-produtos catalogo-container-altura">
         ${resultadosBusca.map((item) => {
           const saldo = obterSaldoFilial(item, filialAtual);
           const est = rotuloEstoque(classificarEstoque(saldo));
@@ -735,14 +736,14 @@ function desenharResultados(folheando = false) {
   } else {
     caixa.innerHTML = `
       ${cabecalhoInfo}
-      <div class="rolagem" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:var(--radius-md)">
-      <table class="tabela tabela-ibcs">
+      <div class="rolagem catalogo-container-altura" style="width:100%;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:var(--radius-md)">
+      <table class="tabela tabela-ibcs" style="width:100%;table-layout:auto">
         <thead>
           <tr>
-            <th style="width:140px">Código</th>
-            <th>Descrição & Disponibilidade</th>
-            <th class="col-valor" style="width:120px;text-align:right">Unitário</th>
-            <th style="width:100px;text-align:center">Ação</th>
+            <th style="width:170px;min-width:140px">Código</th>
+            <th style="width:auto">Descrição & Disponibilidade</th>
+            <th class="col-valor" style="width:140px;min-width:120px;text-align:right">Unitário</th>
+            <th style="width:110px;min-width:90px;text-align:center">Ação</th>
           </tr>
         </thead>
         <tbody>${resultadosBusca.map((item, i) => {
@@ -752,7 +753,7 @@ function desenharResultados(folheando = false) {
           const jaTem = itensDaCotacao.has(item.codigo_sigma);
           return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:${esgotado ? 'not-allowed' : 'pointer'};${
             i === selecionado ? 'background:var(--bg-hover)' : ''}">
-            <td style="width:140px">
+            <td style="width:170px;min-width:140px">
               <div class="forte">${esc(item.codigo_sigma)}</div>
               <div class="minusculo suave">${esc(item.codigo_fabricante || '')}</div>
             </td>
@@ -766,12 +767,12 @@ function desenharResultados(folheando = false) {
                 ${seloHistorico(historicoDoItem(clienteId, item.codigo_sigma))}
               </div>
             </td>
-            <td class="col-valor forte">${formatarBRL(item.valor_unitario_centavos)}</td>
-            <td style="text-align:center">
+            <td class="col-valor forte" style="width:140px;min-width:120px;text-align:right">${formatarBRL(item.valor_unitario_centavos)}</td>
+            <td style="width:110px;min-width:90px;text-align:center">
               <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--fantasma' : 'btn--primario'}"
                       data-add="${esc(item.codigo_sigma)}"
                       ${esgotado ? 'disabled aria-disabled="true"' : ''}
-                      style="min-height:34px;padding:0 10px">
+                      style="min-height:34px;padding:0 12px;width:100%">
                 ${esgotado ? 'Esgotado' : '+ Cotar'}
               </button>
             </td>

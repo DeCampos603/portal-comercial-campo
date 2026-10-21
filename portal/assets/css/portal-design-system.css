@@ -786,3 +786,62 @@ html, body {
     gap: var(--space-3);
   }
 }
+
+
+/* ==========================================================================
+   ENCAIXE ADAPTATIVO DO CATÁLOGO DE ITENS (LARGURA & ALTURA TOTAL DA ABA)
+   ========================================================================== */
+#cot-resultados {
+  width: 100% !important;
+  display: block;
+}
+
+.catalogo-container-altura {
+  width: 100% !important;
+  height: clamp(500px, calc(100vh - 290px), 880px);
+  max-height: calc(100dvh - 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-surface);
+}
+
+.catalogo-container-altura::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.catalogo-container-altura::-webkit-scrollbar-track {
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.catalogo-container-altura::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.catalogo-container-altura::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.tabela-ibcs {
+  width: 100% !important;
+  table-layout: auto;
+}
+
+.tabela-ibcs th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-surface);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+@media (max-width: 768px) {
+  .catalogo-container-altura {
+    height: auto;
+    max-height: calc(100dvh - 230px);
+    min-height: 380px;
+  }
+}
