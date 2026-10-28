@@ -845,3 +845,16 @@ html, body {
     min-height: 380px;
   }
 }
+
+/* Blindagem V2 Pro: tabular-nums e ocultacao de scrollbars horizontais em abas/filtros */
+.tabela-ibcs, .tabela-ibcs td, .tabela-ibcs th, .preco, .valor, .numero {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+.abas, .abas-mobile, .barra-filtros, .filtros, [role='tablist'] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.abas::-webkit-scrollbar, .abas-mobile::-webkit-scrollbar, .barra-filtros::-webkit-scrollbar, .filtros::-webkit-scrollbar, [role='tablist']::-webkit-scrollbar {
+  display: none;
+}
