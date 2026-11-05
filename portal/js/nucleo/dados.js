@@ -119,12 +119,23 @@ const COLUNAS_COTACAO_BASE =
 // o histórico todo em vez de perder só a fotografia do cabeçalho.
 const COLUNAS_COTACAO = `${COLUNAS_COTACAO_BASE}, vendedor, cliente, empresa`;
 
+export function normalizarCotacao(c) {
+  if (!c) return c;
+  const desc = c.total_desconto_centavos ?? c.condicoes?.total_desconto_centavos ?? 0;
+  const bruto = c.total_bruto_centavos ?? c.condicoes?.total_bruto_centavos ?? ((c.total_produtos_centavos ?? 0) + desc);
+  return {
+    ...c,
+    total_desconto_centavos: desc,
+    total_bruto_centavos: bruto,
+  };
+}
+
 async function buscarCotacoes() {
   try {
     const dados = await buscarTudo('cotacoes', COLUNAS_COTACAO, 'data');
     recursos.cotacoes = true;
     recursos.fotografiaCotacao = true;
-    return dados;
+    return dados.map(normalizarCotacao);
   } catch (erro) {
     const mensagem = erro.message || '';
 
@@ -134,13 +145,16 @@ async function buscarCotacoes() {
       console.warn('Colunas de fotografia ausentes — rode '
         + 'modelos/supabase/05-historico-cotacoes.sql. O histórico funciona, '
         + 'mas o PDF regerado usa o cadastro atual do cliente.');
-      return buscarTudo('cotacoes', COLUNAS_COTACAO_BASE, 'data');
+      const dados = await buscarTudo('cotacoes', COLUNAS_COTACAO_BASE, 'data');
+      return dados.map(normalizarCotacao);
     }
 
-    if (!/does not exist|relation|schema cache/i.test(mensagem)) throw erro;
-    recursos.cotacoes = false;
-    console.warn('Tabela cotacoes ausente — rode modelos/supabase/03-cnpj-e-cotacoes.sql');
-    return [];
+    if (/relation.*cotacoes.*does not exist|table.*cotacoes.*does not exist|could not find.*cotacoes.*in the schema cache/i.test(mensagem)) {
+      recursos.cotacoes = false;
+      console.warn('Tabela cotacoes ausente — rode modelos/supabase/03-cnpj-e-cotacoes.sql');
+      return [];
+    }
+    throw erro;
   }
 }
 
@@ -155,7 +169,7 @@ export async function carregar() {
     estado.catalogo = catCache.dados;
     estado.clientes = cliCache?.dados ?? [];
     estado.visitas = visCache?.dados ?? [];
-    estado.cotacoes = cotCache?.dados ?? [];
+    estado.cotacoes = (cotCache?.dados ?? []).map(normalizarCotacao);
     estado.atualizadoEm = catCache.gravadoEm;
     estado.daCache = true;
     avisar();
@@ -171,6 +185,10 @@ export async function atualizar() {
   avisar();
 
   try {
+    // 1. Descarrega fila primeiro
+    await sincronizarFila();
+
+    // 2. Busca dados mais recentes do servidor
     const [catalogo, clientes, visitas, cotacoes] = await Promise.all([
       buscarCatalogo(),
       buscarClientes(),
@@ -180,18 +198,49 @@ export async function atualizar() {
       buscarCotacoes(),
     ]);
 
+    // 3. Mescla com pendências locais da fila para NUNCA perder trabalho offline
+    const itensFila = await pendentes();
+
+    const mapaCotacoes = new Map();
+    for (const c of cotacoes) mapaCotacoes.set(c.id, normalizarCotacao(c));
+    for (const it of itensFila) {
+      if (it.tabela === 'cotacoes' && it.registro) {
+        mapaCotacoes.set(it.registro.id, normalizarCotacao(it.registro));
+      }
+    }
+    const cotacoesMescladas = Array.from(mapaCotacoes.values())
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+
+    const mapaVisitas = new Map();
+    for (const v of visitas) mapaVisitas.set(v.id, v);
+    for (const it of itensFila) {
+      if (it.tabela === 'visitas' && it.registro) {
+        mapaVisitas.set(it.registro.id, it.registro);
+      }
+    }
+    const visitasMescladas = Array.from(mapaVisitas.values());
+
+    const mapaClientes = new Map();
+    for (const cli of clientes) mapaClientes.set(cli.id, cli);
+    for (const it of itensFila) {
+      if (it.tabela === 'clientes' && it.registro) {
+        mapaClientes.set(it.registro.id, it.registro);
+      }
+    }
+    const clientesMesclados = Array.from(mapaClientes.values());
+
     estado.catalogo = catalogo;
-    estado.clientes = clientes;
-    estado.visitas = visitas;
-    estado.cotacoes = cotacoes;
+    estado.clientes = clientesMesclados;
+    estado.visitas = visitasMescladas;
+    estado.cotacoes = cotacoesMescladas;
     estado.atualizadoEm = new Date().toISOString();
     estado.daCache = false;
 
     await Promise.all([
       guardar('catalogo', catalogo),
-      guardar('clientes', clientes),
-      guardar('visitas', visitas),
-      guardar('cotacoes', cotacoes),
+      guardar('clientes', clientesMesclados),
+      guardar('visitas', visitasMescladas),
+      guardar('cotacoes', cotacoesMescladas),
     ]);
   } catch (erro) {
     // Offline com cache é situação normal, não erro para alarmar.
@@ -250,11 +299,8 @@ export async function salvarCliente(cliente) {
  * preço de hoje.
  */
 export async function salvarCotacao(cotacao) {
-  if (!recursos.cotacoes) {
-    console.warn('Histórico indisponível: tabela cotacoes ainda não existe.');
-    return null;
-  }
-  const registro = { ...cotacao, atualizado_em: new Date().toISOString() };
+  const norm = normalizarCotacao(cotacao);
+  const registro = { ...norm, atualizado_em: new Date().toISOString() };
 
   const i = estado.cotacoes.findIndex((c) => c.id === registro.id);
   if (i >= 0) estado.cotacoes[i] = { ...estado.cotacoes[i], ...registro };
@@ -309,27 +355,62 @@ export async function excluirVisita(id) {
   }
 }
 
-/** Esvazia a fila. Para no primeiro erro — não martela servidor fora do ar. */
-export async function sincronizarFila() {
-  if (estado.sincronizando) return;
-  const fila = await pendentes();
-  estado.pendentes = fila.length;
-  if (!fila.length || !navigator.onLine) { avisar(); return; }
+const COLUNAS_VALIDAS_COTACAO = new Set([
+  'id', 'equipe_id', 'representante_id', 'cliente_id', 'numero',
+  'nome_cliente', 'data', 'situacao', 'total_produtos_centavos',
+  'total_ipi_centavos', 'total_com_ipi_centavos', 'quantidade_itens',
+  'itens', 'observacoes', 'condicoes', 'vendedor', 'cliente', 'empresa',
+  'atualizado_em'
+]);
 
-  for (const item of fila) {
-    try {
-      const { error } = await sb.from(item.tabela).upsert(item.registro);
-      if (error) throw error;
-      await desenfileirar(item.id);
-    } catch (erro) {
-      await marcarTentativa(item);
-      console.warn('Sincronização adiada:', erro.message);
-      break;
+function sanitizarParaSupabase(tabela, registro) {
+  if (tabela !== 'cotacoes' || !registro) return registro;
+  const limpo = {};
+  for (const [k, v] of Object.entries(registro)) {
+    if (COLUNAS_VALIDAS_COTACAO.has(k)) {
+      limpo[k] = v;
     }
   }
+  return limpo;
+}
 
-  estado.pendentes = (await pendentes()).length;
-  avisar();
+let sincronizandoFilaAtivo = false;
+
+/** Esvazia a fila. Sanitiza payloads e não trava a fila em erros 4xx permanentes. */
+export async function sincronizarFila() {
+  if (sincronizandoFilaAtivo) return;
+  sincronizandoFilaAtivo = true;
+
+  try {
+    const fila = await pendentes();
+    estado.pendentes = fila.length;
+    if (!fila.length || !navigator.onLine) { avisar(); return; }
+
+    for (const item of fila) {
+      try {
+        const payload = sanitizarParaSupabase(item.tabela, item.registro);
+        const { error } = await sb.from(item.tabela).upsert(payload);
+        if (error) {
+          console.error(`Erro ao sincronizar ${item.id}:`, error);
+          if (error.code && error.code.startsWith('PGRST') && error.code !== 'PGRST116') {
+            await marcarTentativa(item);
+            continue;
+          }
+          throw error;
+        }
+        await desenfileirar(item.id);
+      } catch (erro) {
+        await marcarTentativa(item);
+        console.warn('Sincronização adiada:', erro.message);
+        break;
+      }
+    }
+
+    estado.pendentes = (await pendentes()).length;
+    avisar();
+  } finally {
+    sincronizandoFilaAtivo = false;
+  }
 }
 
 window.addEventListener('online', () => sincronizarFila());

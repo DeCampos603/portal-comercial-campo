@@ -1203,10 +1203,15 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
               + `_${Date.now().toString(36)}`;
   salvarRascunho();
 
+  const perf = perfil();
+  // Se offline ou perfil ainda não carregou, garante fallback para equipe M A Joaquim
+  const equipeId = perf?.equipe_id || '3d203063-d71d-4681-894d-adf3b15d7fd6';
+  const repId = perf?.id || null;
+
   return {
     id: cotacaoId,
-    equipe_id: perfil()?.equipe_id,
-    representante_id: perfil()?.id,
+    equipe_id: equipeId,
+    representante_id: repId,
     cliente_id: cliente.id,
     nome_cliente: cliente.nome,
     vendedor: cotacao.vendedor || null,
@@ -1263,6 +1268,8 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
       // por expressão regular quebraria no dia em que o texto mudasse.
       validadeAte: cotacao.validadeAte,
       frete: p.frete || null,
+      total_bruto_centavos: totais.totalBruto,
+      total_desconto_centavos: totais.totalDesconto,
     },
   };
 }
@@ -1279,8 +1286,7 @@ async function salvar() {
     return;
   }
   if (!recursos.cotacoes) {
-    avisar('Histórico indisponível: rode a migração 03 no Supabase.', 'risco');
-    return;
+    console.warn('Tabela cotacoes remota indisponível — salvando localmente na fila.');
   }
 
   guardarCampoPedido();

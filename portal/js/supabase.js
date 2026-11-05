@@ -15,8 +15,17 @@ export const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
 });
 
-/** Perfil do representante logado (linha da tabela `representantes`). */
-let perfilAtual = null;
+const CHAVE_PERFIL_CACHE = 'portal_perfil_cache';
+
+/** Perfil do representante logado (linha da tabela `representantes`), com cache persistente. */
+let perfilAtual = (() => {
+  try {
+    const salvo = localStorage.getItem(CHAVE_PERFIL_CACHE);
+    return salvo ? JSON.parse(salvo) : null;
+  } catch {
+    return null;
+  }
+})();
 
 export function perfil() {
   return perfilAtual;
@@ -38,6 +47,7 @@ export async function entrar(email, senha) {
 
 export async function sair() {
   perfilAtual = null;
+  try { localStorage.removeItem(CHAVE_PERFIL_CACHE); } catch {}
   await sb.auth.signOut();
 }
 
@@ -49,6 +59,7 @@ export async function carregarPerfil() {
   const { data: sessao } = await sb.auth.getSession();
   if (!sessao.session) {
     perfilAtual = null;
+    try { localStorage.removeItem(CHAVE_PERFIL_CACHE); } catch {}
     return null;
   }
   const { data, error } = await sb
@@ -58,11 +69,17 @@ export async function carregarPerfil() {
     .maybeSingle();
 
   if (error) {
-    // Offline: mantém o perfil que já estava em memória em vez de deslogar.
+    // Offline: mantém o perfil que já estava em memória/cache em vez de deslogar.
     console.warn('Não consegui carregar o perfil:', error.message);
     return perfilAtual;
   }
-  perfilAtual = data && data.ativo ? data : null;
+  if (data && data.ativo) {
+    perfilAtual = data;
+    try { localStorage.setItem(CHAVE_PERFIL_CACHE, JSON.stringify(data)); } catch {}
+  } else {
+    perfilAtual = null;
+    try { localStorage.removeItem(CHAVE_PERFIL_CACHE); } catch {}
+  }
   return perfilAtual;
 }
 
