@@ -8,7 +8,7 @@
 import { entrar, sair, sessaoAtual, carregarPerfil, perfil } from './supabase.js';
 import { carregar, atualizar, estado, aoMudar, sincronizarFila } from './nucleo/dados.js';
 import { formatarDataHora, formatarData, diasDesde } from './nucleo/moeda.js';
-import { icone } from './nucleo/ui.js';
+import { icone, comCarregando } from './nucleo/ui.js';
 import { DIAS_ATE_TABELA_VELHA, DISPARADOR_HABILITADO } from './config.js';
 
 import { montarCotacoes, abrirDrawerCotacao, atualizarBadgeCarrinho } from './cotacoes/tela.js';
@@ -55,20 +55,17 @@ el('form-login').addEventListener('submit', async (evento) => {
   const botao = el('login-enviar');
   const erro = el('login-erro');
   erro.classList.add('oculto');
-  botao.disabled = true;
-  botao.textContent = 'Entrando…';
 
   try {
-    const p = await entrar(el('login-email').value, el('login-senha').value);
-    el('login-senha').value = '';
-    if (!p) { mostrar('sem-acesso'); return; }
-    await iniciarPortal();
+    await comCarregando(botao, async () => {
+      const p = await entrar(el('login-email').value, el('login-senha').value);
+      el('login-senha').value = '';
+      if (!p) { mostrar('sem-acesso'); return; }
+      await iniciarPortal();
+    });
   } catch (e) {
     erro.textContent = e.message;
     erro.classList.remove('oculto');
-  } finally {
-    botao.disabled = false;
-    botao.textContent = 'Entrar';
   }
 });
 

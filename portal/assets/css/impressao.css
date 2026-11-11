@@ -42,6 +42,10 @@
   }
 
   html, body {
+    color-scheme: light;
+    --cor-texto: #0f172a;
+    --cor-texto-suave: #475569;
+    --cor-superficie: #ffffff;
     background: #fff !important;
     color: #0f172a !important;
     font-size: 9.5pt;

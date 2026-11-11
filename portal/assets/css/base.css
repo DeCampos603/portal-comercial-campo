@@ -1,327 +1,516 @@
-/* =====================================================================
-   Base — tokens, reset e tipografia.
-
-   Isto é uma FERRAMENTA DE TRABALHO, não um site institucional. Densidade e
-   velocidade valem mais que espaço em branco generoso. O acabamento existe
-   para dar CONFIANÇA a um documento comercial, não para impressionar.
-
-   🎨 A paleta não foi escolhida: foi MEDIDA na logo da M A Joaquim.
-      matiz 206,2°, saturação 89% — a cor de 18,4% dos pixels opacos da arte.
-      A família de alerta parte da matiz 356,8°, medida na logo da SIBB, para
-      que o vermelho de erro pertença ao mesmo mundo visual.
-
-   ♿ Todo par texto/fundo foi auditado contra a WCAG, cada um com o SEU
-      mínimo: 4,5:1 para texto corrido, 3:1 para contorno de campo e anel de
-      foco (1.4.11), isento para borda decorativa. Ao mexer numa cor, refaça
-      a conta — "parece legível" não é medida.
-   ===================================================================== */
+/* ==========================================================================
+   Portal Comercial de Campo — Design Tokens & Fundamentos (base.css)
+   Arquitetura em 3 camadas (Primitivos -> Semânticos -> Utilitários)
+   • 100% local/offline (CSP estrita: sem fontes/CDNs externos)
+   • Precisão tabular financeira (tabular-nums lining-nums)
+   • Contraste WCAG 2.2 AA/AAA em tema Claro e Escuro automático
+   • Grid base de 4px e Motion cinético GPU-only (--ease-kinetic)
+   ========================================================================== */
 
 :root {
-  /* ---------------------------------------------------- marca (medida) */
-  --azul-50:  #F5F9FC;
-  --azul-100: #E6F1F9;
-  --azul-200: #C7E1F4;
-  --azul-300: #96C7EE;
-  --azul-400: #49A3E9;
-  --azul-500: #127CCE;
-  --azul-600: #0A60A3;
-  --azul-700: #084F87;   /* a cor da logo */
-  --azul-800: #043F6C;
-  --azul-900: #032E4E;
+  color-scheme: light dark;
 
-  /* ------------------------------------------------------------ neutros
-     Levemente frios (mesma família de matiz, saturação 14%): cinza puro ao
-     lado de um azul saturado parece sujo. */
-  --cinza-0:   #FFFFFF;
-  --cinza-50:  #FBFBFC;
-  --cinza-100: #F5F6F7;
-  --cinza-200: #E9ECEF;
-  --cinza-300: #D9DEE2;
-  --cinza-400: #AEB8C2;
-  --cinza-500: #7F8F9F;
-  --cinza-600: #607080;
-  --cinza-700: #4B5763;
-  --cinza-800: #353D46;
-  --cinza-900: #21262C;
+  /* 1. Primitivos de Marca e Neutros */
+  --azul-50:  #f0f7ff;
+  --azul-100: #e0effe;
+  --azul-200: #bae0fd;
+  --azul-300: #7cc4fa;
+  --azul-400: #38a7f7;
+  --azul-500: #0e88e6;
+  --azul-600: #0c6fc2;
+  --azul-700: #084f87;
+  --azul-800: #063d6a;
+  --azul-900: #042b4d;
 
-  /* -------------------------------------------------------- semânticas
-     `forte` = texto · `base` = preenchimento e ícone · `borda` e `fundo` */
-  --ok-forte: #1D7C50;      --ok-base: #27A56A;
-  --ok-borda: #BBDDCD;      --ok-fundo: #F0F7F4;
-  --atencao-forte: #905E09; --atencao-base: #C07E0C;
-  --atencao-borda: #E5D3B3; --atencao-fundo: #F9F5EE;
-  --risco-forte: #7C1D22;   --risco-base: #A5272E;
-  --risco-borda: #DDBBBC;   --risco-fundo: #F7F0F0;
-  --info-forte: #085591;    --info-base: #0B71C1;
-  --info-borda: #B3CFE5;    --info-fundo: #EEF4F9;
+  --cinza-0:   #ffffff;
+  --cinza-50:  #f8fafc;
+  --cinza-100: #f1f5f9;
+  --cinza-200: #e2e8f0;
+  --cinza-300: #cbd5e1;
+  --cinza-400: #94a3b8;
+  --cinza-500: #64748b;
+  --cinza-600: #475569;
+  --cinza-700: #334155;
+  --cinza-800: #1e293b;
+  --cinza-900: #0f172a;
+  --cinza-950: #090d16;
 
-  /* ------------------------------------------------------------- papéis
-     A interface usa ESTES nomes, nunca a escala direta. Trocar o tom de um
-     papel é uma linha; caçar `--cinza-300` espalhado pelo CSS não é. */
-  --cor-fundo: var(--cinza-100);
-  --cor-superficie: var(--cinza-0);
-  --cor-superficie-2: var(--cinza-100);
-  --cor-superficie-3: var(--cinza-200);
+  /* Estados Semânticos — Tríades WCAG AAA (>= 7:1) */
+  --ok-bg:          #ecfdf5;
+  --ok-texto:       #064e3b;
+  --ok-borda:       #a7f3d0;
+  --ok-ponto:       #059669;
 
-  --cor-texto: var(--cinza-900);
-  --cor-texto-2: var(--cinza-700);
-  --cor-texto-suave: var(--cinza-600);
-  --cor-texto-desabilitado: var(--cinza-400);
+  --atencao-bg:     #fffbeb;
+  --atencao-texto:  #78350f;
+  --atencao-borda:  #fde68a;
+  --atencao-ponto:  #d97706;
 
-  --cor-borda: var(--cinza-200);         /* decorativa: cartão, divisória */
-  --cor-borda-2: var(--cinza-300);
-  /* Contorno de campo e de controle. A WCAG 1.4.11 pede 3:1, e o campo
-     aparece sobre as TRÊS superfícies — o pior caso é a mais escura delas,
-     não o branco. Medido: 3,69 / 3,41 / 3,11. O tom anterior (#8896A5)
-     passava só no branco, com 2,79 e 2,55 nas outras duas. */
-  --cor-borda-forte: #768798;
+  --risco-bg:       #fef2f2;
+  --risco-texto:    #7f1d1d;
+  --risco-borda:    #fecaca;
+  --risco-ponto:    #dc2626;
+  --risco-acao:     #b91c1c;
+  --risco-acao-hover: #991b1b;
 
-  --cor-primaria: var(--azul-700);
-  --cor-primaria-forte: var(--azul-800);
-  --cor-primaria-viva: var(--azul-600);
-  --cor-primaria-clara: var(--azul-100);
-  --cor-foco: var(--azul-500);
+  --info-bg:        #eff6ff;
+  --info-texto:     #1e3a8a;
+  --info-borda:     #bfdbfe;
+  --info-ponto:     #2563eb;
 
-  --cor-ok: var(--ok-forte);           --cor-ok-fundo: var(--ok-fundo);
-  --cor-atencao: var(--atencao-forte); --cor-atencao-fundo: var(--atencao-fundo);
-  --cor-risco: var(--risco-forte);     --cor-risco-fundo: var(--risco-fundo);
-  --cor-info: var(--info-forte);       --cor-info-fundo: var(--info-fundo);
-  --cor-neutro: var(--cinza-600);      --cor-neutro-fundo: var(--cinza-100);
+  --neutro-bg:      #f1f5f9;
+  --neutro-texto:   #334155;
+  --neutro-borda:   #cbd5e1;
 
-  /* -------------------------------------------------------- tipografia
-     Sem fonte externa: a CSP bloqueia CDN, e um pedido de rede a mais é
-     tempo de tela em branco no celular do representante em campo.
-     'Segoe UI Variable' existe no Windows 11 e é bem melhor desenhada. */
-  --fonte: 'Segoe UI Variable Text', -apple-system, BlinkMacSystemFont,
-           'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --fonte-titulo: 'Segoe UI Variable Display', var(--fonte);
-  --fonte-numero: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* 2. Camada Semântica (Light Mode) */
+  --cor-fundo:              var(--cinza-50);
+  --cor-fundo-login:        radial-gradient(circle at 18% 12%, rgba(8, 79, 135, 0.10) 0%, transparent 48%),
+                            radial-gradient(circle at 86% 84%, rgba(14, 136, 230, 0.08) 0%, transparent 44%),
+                            var(--cinza-50);
+  --cor-superficie:         var(--cinza-0);
+  --cor-superficie-alt:     var(--cinza-100);
+  --cor-superficie-elevada: var(--cinza-0);
+  --cor-cabecalho-vidro:    color-mix(in srgb, var(--cinza-0) 90%, transparent);
 
-  --t-xs:   clamp(0.75rem, 0.70rem + 0.25vw, 0.8125rem); /* 12px -> 13px */
-  --t-sm:   clamp(0.8125rem, 0.78rem + 0.16vw, 0.875rem); /* 13px -> 14px */
-  --t-base: clamp(0.9375rem, 0.90rem + 0.19vw, 1rem); /* 15px -> 16px */
-  --t-md:   clamp(1rem, 0.95rem + 0.25vw, 1.0625rem); /* 16px -> 17px */
-  --t-lg:   clamp(1.125rem, 1.05rem + 0.38vw, 1.25rem); /* 18px -> 20px */
-  --t-xl:   clamp(1.375rem, 1.25rem + 0.63vw, 1.5rem); /* 22px -> 24px */
-  --t-2xl:  clamp(1.75rem, 1.60rem + 0.75vw, 2rem); /* 28px -> 32px */
+  --cor-borda:              var(--cinza-200);
+  --cor-borda-forte:        var(--cinza-300);
+  --cor-divisor:            rgba(15, 23, 42, 0.08);
 
-  --peso-normal: 400;
-  --peso-medio: 500;
-  --peso-forte: 600;
-  --peso-titulo: 650;
+  --cor-texto:              var(--cinza-900);
+  --cor-texto-secundario:   var(--cinza-700);
+  --cor-texto-suave:        var(--cinza-600);
+  --cor-suave:              var(--cor-texto-suave);
+  --cor-texto-inverso:      var(--cinza-0);
 
-  /* ---------------------------------------------------------- espaçamento
-     Grade de 4px. Um valor fora dela desalinha com todo o resto da tela. */
-  --e1: 4px;  --e2: 8px;  --e3: 12px; --e4: 16px;
-  --e5: 20px; --e6: 24px; --e8: 32px; --e10: 40px; --e12: 48px;
+  /* Separação intencional: texto de marca vs. fundo de botão sólido */
+  --cor-marca:              var(--azul-700);
+  --cor-marca-texto:        var(--azul-700);
+  --cor-marca-acao:         var(--azul-700);
+  --cor-marca-acao-hover:   var(--azul-800);
+  --cor-marca-sutil:        var(--azul-50);
+  --cor-marca-borda:        var(--azul-200);
+  --cor-foco:               var(--azul-500);
 
-  /* ------------------------------------------------------------- forma */
-  --raio-sm: 5px;
-  --raio: 8px;
-  --raio-lg: 12px;
-  --raio-xl: 16px;
-  --raio-cheio: 999px;
+  --cor-ok:                 var(--ok-ponto);
+  --cor-ok-fundo:           var(--ok-bg);
+  --cor-sucesso:            #047857;
+  --cor-atencao:            var(--atencao-ponto);
+  --cor-risco:              var(--risco-ponto);
+  --cor-info:               var(--info-ponto);
+  --cor-primaria:           var(--cor-marca-texto);
+  --cor-superficie-2:       var(--cor-superficie-alt);
 
-  /* Sombra em duas camadas: um contorno de 1px que assenta o elemento no
-     fundo, e uma difusa que dá altura. Uma sombra só, forte, envelhece a
-     interface — o efeito "caixa flutuante" dos anos 2010. */
-  --sombra-sutil: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
-  --sombra: 0 4px 6px -1px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
-  --sombra-media: 0 10px 15px -3px rgba(16, 24, 40, 0.08), 0 4px 6px -4px rgba(16, 24, 40, 0.03);
-  --sombra-alta: 0 20px 25px -5px rgba(16, 24, 40, 0.10), 0 8px 10px -6px rgba(16, 24, 40, 0.04);
-  --anel-foco: 0 0 0 3px rgb(18 124 206 / .28);
+  /* Aliases legados e Design System unificados */
+  --primary-50:   var(--azul-50);
+  --primary-100:  var(--azul-100);
+  --primary-200:  var(--azul-200);
+  --primary-300:  var(--azul-300);
+  --primary-400:  var(--azul-400);
+  --primary-500:  var(--azul-500);
+  --primary-600:  var(--azul-600);
+  --primary-700:  var(--cor-marca-texto);
+  --primary-800:  var(--azul-800);
+  --primary-900:  var(--azul-900);
 
-  /* ------------------------------------------------------------ tempo
-     150ms para resposta ao toque, 200ms para transição de estado, 300ms
-     para algo que entra na tela. Acima disso a interface parece lenta. */
-  --rapido: 150ms;
-  --normal: 200ms;
-  --lento: 300ms;
-  --curva: cubic-bezier(0.16, 1, 0.3, 1);
-  --curva-saida: cubic-bezier(0.7, 0, 0.84, 0);
-  
-  /* Curvas avançadas para micro-interações fluidas */
-  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
-  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
-  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --neutral-0:    var(--cinza-0);
+  --neutral-50:   var(--cinza-50);
+  --neutral-100:  var(--cinza-100);
+  --neutral-200:  var(--cinza-200);
+  --neutral-300:  var(--cinza-300);
+  --neutral-400:  var(--cinza-400);
+  --neutral-500:  var(--cinza-500);
+  --neutral-600:  var(--cinza-600);
+  --neutral-700:  var(--cinza-700);
+  --neutral-800:  var(--cinza-800);
+  --neutral-900:  var(--cinza-900);
 
-  --altura-cabecalho: 56px;
-  --altura-rodape: 62px;
-  --largura-conteudo: 1360px;
+  --bg-app:       var(--cor-fundo);
+  --bg-surface:   var(--cor-superficie);
+  --bg-subtle:    var(--cor-superficie-alt);
+  --bg-hover:     var(--cinza-100);
+
+  --text-main:      var(--cor-texto);
+  --text-secondary: var(--cor-texto-secundario);
+  --text-muted:     var(--cor-texto-suave);
+  --text-inverse:   var(--cor-texto-inverso);
+
+  --border-subtle:  var(--cor-borda);
+  --border-strong:  var(--cor-borda-forte);
+
+  --estoque-alto-bg:        var(--ok-bg);
+  --estoque-alto-texto:     var(--ok-texto);
+  --estoque-alto-borda:     var(--ok-borda);
+
+  --estoque-baixo-bg:       var(--atencao-bg);
+  --estoque-baixo-texto:    var(--atencao-texto);
+  --estoque-baixo-borda:    var(--atencao-borda);
+
+  --estoque-esgotado-bg:    var(--risco-bg);
+  --estoque-esgotado-texto: var(--risco-texto);
+  --estoque-esgotado-borda: var(--risco-borda);
+
+  --estoque-desc-bg:        var(--neutro-bg);
+  --estoque-desc-texto:     var(--neutro-texto);
+  --estoque-desc-borda:     var(--neutro-borda);
+
+  /* Tipografia System-First (zero CDN/LGPD) */
+  --fonte: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont,
+           'Inter', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fonte-mono: 'Cascadia Code', ui-monospace, 'SFMono-Regular', Menlo,
+                Consolas, 'Liberation Mono', monospace;
+  --font-sans: var(--fonte);
+  --font-mono: var(--fonte-mono);
+
+  /* Escala Tipográfica */
+  --t-xs:   0.75rem;    /* 12px */
+  --t-sm:   0.8125rem;  /* 13px */
+  --t-base: 0.9375rem;  /* 15px - equilíbrio leitura + densidade operacional */
+  --t-md:   1rem;       /* 16px */
+  --t-lg:   1.125rem;   /* 18px */
+  --t-xl:   1.3125rem;  /* 21px */
+  --t-2xl:  1.625rem;   /* 26px */
+
+  --text-xs:   var(--t-xs);
+  --text-sm:   var(--t-sm);
+  --text-base: var(--t-base);
+  --text-lg:   var(--t-lg);
+  --text-xl:   var(--t-xl);
+  --text-2xl:  var(--t-2xl);
+
+  /* Ritmo Espacial em Grid de 4px */
+  --e1:  4px;
+  --e2:  8px;
+  --e3:  12px;
+  --e4:  16px;
+  --e5:  20px;
+  --e6:  24px;
+  --e8:  32px;
+  --e10: 40px;
+  --e12: 48px;
+
+  --space-1: var(--e1);
+  --space-2: var(--e2);
+  --space-3: var(--e3);
+  --space-4: var(--e4);
+  --space-5: var(--e5);
+  --space-6: var(--e6);
+  --space-8: var(--e8);
+  --space-10: var(--e10);
+  --space-12: var(--e12);
+
+  /* Raios e Elevação */
+  --raio:        8px;
+  --raio-lg:     14px;
+  --raio-xl:     18px;
+  --raio-pilula: 999px;
+
+  --radius-sm:   4px;
+  --radius-md:   var(--raio);
+  --radius-lg:   var(--raio-lg);
+  --radius-full: var(--raio-pilula);
+
+  --sombra-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --sombra:    0 1px 3px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --sombra-md: 0 8px 20px -4px rgba(15, 23, 42, 0.10), 0 3px 6px -2px rgba(15, 23, 42, 0.05);
+  --sombra-lg: 0 22px 44px -10px rgba(15, 23, 42, 0.22), 0 8px 18px -6px rgba(15, 23, 42, 0.08);
+
+  --shadow-xs: var(--sombra-xs);
+  --shadow-sm: var(--sombra);
+  --shadow-md: var(--sombra-md);
+  --shadow-lg: var(--sombra-lg);
+
+  /* Motion Cinético (exclusivo para transform e opacity) */
+  --ease-kinetic: cubic-bezier(0.16, 1, 0.3, 1);
+  --curva:        var(--ease-kinetic);
+  --dur-rapida:   150ms;
+  --dur-media:    240ms;
+  --dur-lenta:    340ms;
+
+  /* Z-index governado */
+  --z-sticky: 20;
+  --z-header: 1000;
+  --z-drawer: 2000;
+  --z-modal:  2100;
+  --z-toast:  3000;
+
+  --largura-conteudo: 1220px;
 }
 
-/* =====================================================================
-   Modo escuro — o portal é usado no carro, à noite, entre visitas.
-
-   Não é a paleta clara invertida: no escuro, o azul da marca a 28% de
-   luminância some no fundo. A marca sobe para o tom 300/400, que mantém a
-   matiz medida e recupera o contraste.
-   ===================================================================== */
+/* Dark Mode Automático — Alto Contraste em Campo Noturno / Galpões */
 @media (prefers-color-scheme: dark) {
   :root {
-    --cor-fundo: #0E1319;
-    --cor-superficie: #161C24;
-    --cor-superficie-2: #1D2530;
-    --cor-superficie-3: #26303C;
+    --cor-fundo:              var(--cinza-950);
+    --cor-fundo-login:        radial-gradient(circle at 20% 15%, rgba(56, 167, 247, 0.12) 0%, transparent 48%),
+                              radial-gradient(circle at 82% 88%, rgba(8, 79, 135, 0.18) 0%, transparent 45%),
+                              var(--cinza-950);
+    --cor-superficie:         #111827;
+    --cor-superficie-alt:     #182234;
+    --cor-superficie-elevada: #1e293b;
+    --cor-cabecalho-vidro:    color-mix(in srgb, #111827 88%, transparent);
 
-    --cor-texto: #E7ECF2;
-    --cor-texto-2: #BCC7D3;
-    --cor-texto-suave: #93A1B0;
-    --cor-texto-desabilitado: #5D6B7A;
+    --cor-borda:              rgba(148, 163, 184, 0.18);
+    --cor-borda-forte:        rgba(148, 163, 184, 0.32);
+    --cor-divisor:            rgba(148, 163, 184, 0.12);
 
-    --cor-borda: #262F3A;
-    --cor-borda-2: #313C49;
-    /* Contorno de campo: 3:1 contra as TRÊS superfícies do tema, não só a
-       principal. Medido — #55636F dava 2,77:1 sobre a superfície e 2,74:1
-       sobre a secundária, onde os filtros vivem. Este dá 3,89 / 3,50 / 3,03. */
-    --cor-borda-forte: #697A8C;
+    --cor-texto:              #f1f5f9;
+    --cor-texto-secundario:   #cbd5e1;
+    --cor-texto-suave:        #94a3b8;
+    --cor-suave:              var(--cor-texto-suave);
+    --cor-texto-inverso:      #ffffff;
 
-    --cor-primaria: var(--azul-300);
-    --cor-primaria-forte: var(--azul-200);
-    --cor-primaria-viva: var(--azul-400);
-    --cor-primaria-clara: #12283C;
-    --cor-foco: var(--azul-400);
+    --cor-marca:              var(--azul-300);
+    --cor-marca-texto:        var(--azul-300);
+    --cor-marca-acao:         #0f5fa3;
+    --cor-marca-acao-hover:   #1773c2;
+    --cor-marca-sutil:        rgba(56, 167, 247, 0.15);
+    --cor-marca-borda:        rgba(124, 196, 250, 0.34);
+    --cor-foco:               var(--azul-300);
 
-    --ok-forte: #5FCB92;      --ok-base: #2E9A66;
-    --ok-borda: #1E3A2C;      --ok-fundo: #12241B;
-    --atencao-forte: #E7B65C; --atencao-base: #B5810F;
-    --atencao-borda: #3D3320;  --atencao-fundo: #241D12;
-    --risco-forte: #F0908C;   --risco-base: #B93A3F;
-    --risco-borda: #3D2223;   --risco-fundo: #261718;
-    --info-forte: #7CBBEC;    --info-base: #1A7BC4;
-    --info-borda: #1C3348;    --info-fundo: #12212E;
+    --cor-ok:                 #34d399;
+    --cor-sucesso:            #34d399;
+    --cor-atencao:            #fbbf24;
+    --cor-risco:              #f87171;
+    --cor-info:               #60a5fa;
 
-    --sombra-sutil: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-    --sombra: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-    --sombra-media: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-    --sombra-alta: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-    --anel-foco: 0 0 0 3px rgb(73 163 233 / .35);
+    --ok-bg:          #0a271d;
+    --ok-texto:       #86efac;
+    --ok-borda:       rgba(52, 211, 153, 0.34);
+    --ok-ponto:       #34d399;
+
+    --atencao-bg:     #2a1d06;
+    --atencao-texto:  #fde68a;
+    --atencao-borda:  rgba(251, 191, 36, 0.34);
+    --atencao-ponto:  #fbbf24;
+
+    --risco-bg:       #2c1215;
+    --risco-texto:    #fca5a5;
+    --risco-borda:    rgba(248, 113, 113, 0.36);
+    --risco-ponto:    #f87171;
+    --risco-acao:     #b91c1c;
+    --risco-acao-hover: #dc2626;
+
+    --info-bg:        #10213b;
+    --info-texto:     #93c5fd;
+    --info-borda:     rgba(96, 165, 250, 0.34);
+    --info-ponto:     #60a5fa;
+
+    --neutro-bg:      #1e293b;
+    --neutro-texto:   #cbd5e1;
+    --neutro-borda:   rgba(148, 163, 184, 0.28);
+
+    --bg-app:       var(--cor-fundo);
+    --bg-surface:   var(--cor-superficie);
+    --bg-subtle:    var(--cor-superficie-alt);
+    --bg-hover:     var(--cor-superficie-elevada);
+
+    --sombra-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sombra:    0 2px 6px rgba(0, 0, 0, 0.42);
+    --sombra-md: 0 10px 24px -4px rgba(0, 0, 0, 0.55);
+    --sombra-lg: 0 24px 48px -10px rgba(0, 0, 0, 0.72);
   }
 }
 
-/* =====================================================================
-   Reset
-   ===================================================================== */
+/* ==========================================================================
+   Reset Estrutural & Acessibilidade Base
+   ========================================================================== */
 
-*, *::before, *::after { box-sizing: border-box; }
-
-/* 🔴 O `font-size` do <html> fica no padrão do navegador de propósito.
-   Defini-lo em `rem` aqui reescalaria a própria unidade: com
-   `html { font-size: .9375rem }`, todo `rem` passa a valer 15px em vez de 16,
-   e a escala inteira encolhe uma segunda vez. Medido antes da correção: o
-   corpo saía com 14,06px (0,9375 × 15) e os botões com 12,19px.
-   Manter o padrão também respeita quem aumentou a fonte no sistema. */
-html {
-  font-size: 100%;
-  -webkit-text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-html, body {
-  margin: 0;
-  height: 100%;
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* overflow-x: clip previne estouro horizontal SEM quebrar position: sticky */
+  overflow-x: clip;
 }
 
 body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
   font-family: var(--fonte);
   font-size: var(--t-base);
-  font-weight: var(--peso-normal);
   line-height: 1.5;
-  color: var(--cor-texto);
-  background: var(--cor-fundo);
-  -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
-  /* Ativa as versões desenhadas de "1" e do zero cortado quando a fonte tem. */
-  font-feature-settings: 'cv01', 'cv02';
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
 }
-
-img, svg { max-width: 100%; }
-button, input, select, textarea { font: inherit; color: inherit; }
-table { border-collapse: collapse; width: 100%; }
-
-/* =====================================================================
-   Tipografia
-   ===================================================================== */
 
 h1, h2, h3, h4 {
-  margin: 0 0 var(--e2);
-  font-family: var(--fonte-titulo);
-  font-weight: var(--peso-titulo);
-  line-height: 1.25;
-  /* Título com o mesmo espaçamento do corpo parece frouxo em corpo grande. */
-  letter-spacing: -0.011em;
+  margin: 0;
   color: var(--cor-texto);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
 }
-h1 { font-size: var(--t-xl); letter-spacing: -0.018em; }
+
+h1 { font-size: var(--t-2xl); }
 h2 { font-size: var(--t-lg); }
 h3 { font-size: var(--t-md); }
-h4 { font-size: var(--t-base); font-weight: var(--peso-forte); }
 
-p { margin: 0 0 var(--e3); }
-p:last-child { margin-bottom: 0; }
-
-.pequeno   { font-size: var(--t-sm); }
-.minusculo { font-size: var(--t-xs); line-height: 1.45; }
-.forte     { font-weight: var(--peso-forte); }
-.suave     { color: var(--cor-texto-suave); }
-.quebrar   { overflow-wrap: anywhere; }
-
-a { color: var(--cor-primaria); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-a:hover { color: var(--cor-primaria-forte); }
-
-/* Dinheiro e quantidade: tabular e à direita, sempre. Coluna de valores com
-   dígitos de larguras diferentes é ilegível e parece amadorismo. */
-.numero, td.valor, .total-valor, .qtd input, .tabela td[style*='right'] {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
+p {
+  margin: 0;
 }
-td.valor, .total-valor { text-align: right; }
 
-/* =====================================================================
-   Foco — nunca remover sem substituto.
-   Anel duplo: contorno sólido para quem enxerga pouco, halo suave para dar
-   o acabamento. Só em :focus-visible, para não piscar a cada clique de mouse.
-   ===================================================================== */
+a {
+  color: var(--cor-marca-texto);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img, svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Foco visível de alto contraste (WCAG 2.2) apenas para teclado */
 :focus-visible {
   outline: 2px solid var(--cor-foco);
   outline-offset: 2px;
-  border-radius: var(--raio-sm);
 }
 
-::selection { background: var(--azul-200); color: var(--azul-900); }
-@media (prefers-color-scheme: dark) {
-  ::selection { background: var(--azul-800); color: var(--azul-50); }
+[tabindex='-1']:focus {
+  outline: none;
 }
 
-/* Barra de rolagem discreta — a padrão do Windows é larga e cinza-claro,
-   e corta o acabamento de qualquer painel. */
-* { scrollbar-width: thin; scrollbar-color: var(--cinza-400) transparent; }
-@media (prefers-color-scheme: dark) {
-  * { scrollbar-color: var(--cor-borda-2) transparent; }
+/* Scrollbar sutil sem poluir telas móveis */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
 }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
-  background: var(--cinza-400);
-  border: 3px solid transparent;
-  background-clip: content-box;
-  border-radius: var(--raio-cheio);
+  background: color-mix(in srgb, var(--cor-texto-suave) 36%, transparent);
+  border-radius: var(--raio-pilula);
 }
-::-webkit-scrollbar-thumb:hover { background-color: var(--cinza-500); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--cor-texto-suave) 58%, transparent);
+}
 
-.oculto { display: none !important; }
+/* ==========================================================================
+   Utilitários de Layout, Tipografia & Visibilidade
+   ========================================================================== */
+
+.oculto {
+  display: none !important;
+}
+
+.impressao-so {
+  display: none;
+}
+
+.apenas-leitor,
 .so-leitor {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* Quem pediu menos movimento recebe menos movimento — inclusive o scroll. */
+.conteiner {
+  width: 100%;
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+}
+
+.linha {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+
+.linha--fim {
+  justify-content: flex-end;
+}
+
+.linha--centro {
+  justify-content: center;
+}
+
+.entre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+
+.espaco {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pilha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+
+.grade {
+  display: grid;
+  gap: var(--e3);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.grade--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grade--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .grade--2,
+  .grade--3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.forte { font-weight: 700; }
+.suave { color: var(--cor-texto-suave); }
+.pequeno { font-size: var(--t-sm); }
+.minusculo { font-size: var(--t-xs); line-height: 1.4; }
+.numero { font-variant-numeric: tabular-nums lining-nums; }
+.quebrar { overflow-wrap: anywhere; word-break: break-word; }
+
+/* ==========================================================================
+   Respeito a Preferência de Movimento Reduzido (prefers-reduced-motion)
+   ========================================================================== */
+
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: .01ms !important;
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

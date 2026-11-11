@@ -370,19 +370,19 @@ function blocoBusca() {
   return `<div class="cartao" style="margin-bottom:12px;width:100%">
     <div class="cartao__corpo" style="padding:12px 16px">
       <div class="linha" style="gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:center">
-        <div class="campo-busca" style="flex:1;min-width:240px">
+        <div class="campo-busca" style="flex:1;min-width:min(100%, 240px)">
           <input class="campo" id="cot-busca" type="search" autocomplete="off"
                  placeholder="Buscar por código Sigma, código do fabricante ou descrição…"
                  aria-label="Buscar item" aria-describedby="cot-dica">
         </div>
-        <div class="linha" style="gap:12px;align-items:center;flex-shrink:0">
+        <div class="linha" style="gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0">
           <label class="linha pequeno" style="gap:6px;cursor:pointer;white-space:nowrap;margin:0">
             <input type="checkbox" id="cot-so-estoque" ${soComEstoque ? 'checked' : ''}>
             <span>Só com estoque</span>
           </label>
-          <div class="linha" style="gap:2px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px;background:var(--bg-subtle)">
-            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'tabela' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-tabela" title="Visualização em tabela IBCS" style="min-height:34px;padding:0 10px">☰ Tabela</button>
-            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'grid' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-grid" title="Visualização em grade de cards" style="min-height:34px;padding:0 10px">⊞ Cards</button>
+          <div class="linha seg-tabs" role="group" aria-label="Modo de visualização" style="gap:2px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:2px;background:var(--bg-subtle)">
+            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'tabela' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-tabela" aria-pressed="${modoVisualizacao === 'tabela'}" title="Visualização em tabela IBCS">☰ Tabela</button>
+            <button type="button" class="btn btn--pequeno ${modoVisualizacao === 'grid' ? 'btn--primario' : 'btn--fantasma'}" id="btn-vista-grid" aria-pressed="${modoVisualizacao === 'grid'}" title="Visualização em grade de cards">⊞ Cards</button>
           </div>
         </div>
       </div>
@@ -502,7 +502,7 @@ function blocoLinhas(linhas, totais) {
                     style="padding:1px 5px;font-size:0.7rem;vertical-align:middle;margin-left:2px">⚡ Todos</button>
           </th>
           <th style="text-align:right">IPI</th>
-          <th style="text-align:right">Total c/ IPI</th><th></th>
+          <th style="text-align:right">Total c/ IPI</th><th><span class="apenas-leitor">Remover</span></th>
         </tr></thead>
         <tbody>${corpo}</tbody>
       </table>
@@ -763,8 +763,7 @@ function desenharResultados(folheando = false) {
           const est = rotuloEstoque(classificarEstoque(saldo));
           const esgotado = saldo !== null && saldo <= 0;
           const jaTem = itensDaCotacao.has(item.codigo_sigma);
-          return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:pointer;${
-            i === selecionado ? 'background:var(--bg-hover)' : ''}">
+          return `<tr data-add="${esc(item.codigo_sigma)}" class="${i === selecionado ? 'linha-selecionada' : ''}" style="cursor:pointer">
             <td style="width:170px;min-width:140px">
               <div class="forte">${esc(item.codigo_sigma)}</div>
               <div class="minusculo suave">${esc(item.codigo_fabricante || '')}</div>
@@ -780,12 +779,12 @@ function desenharResultados(folheando = false) {
               </div>
             </td>
             <td class="col-valor forte" style="width:140px;min-width:120px;text-align:right">${formatarBRL(item.valor_unitario_centavos)}</td>
-            <td style="width:110px;min-width:90px;text-align:center">
+            <td style="width:116px;min-width:96px;text-align:center">
               <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--risco' : 'btn--primario'}"
                       data-add="${esc(item.codigo_sigma)}"
                       title="${esgotado ? 'Item sem estoque — clique para incluir na cotação mesmo assim' : ''}"
-                      style="min-height:34px;padding:0 12px;width:100%">
-                + Cotar
+                      style="width:100%">
+                ${jaTem ? '+ Mais um' : '+ Cotar'}
               </button>
             </td>
           </tr>`;

@@ -179,7 +179,7 @@ function desenhar(alvo) {
             <th>Data</th><th>Nº</th><th>Cliente</th>
             <th style="text-align:right">Itens</th>
             <th style="text-align:right">Total c/ IPI</th>
-            <th style="width:150px">Situação</th><th></th>
+            <th style="width:150px">Situação</th><th><span class="apenas-leitor">Ações</span></th>
           </tr></thead>
           <tbody>${lista.map(linha).join('')}</tbody>
         </table>

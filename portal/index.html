@@ -22,7 +22,7 @@
 <!-- A cor da barra do navegador no celular: a MEDIDA na logo, não uma
      aproximada. Ver o cabeçalho de assets/css/base.css. -->
 <meta name="theme-color" content="#084F87" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#090d16" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">
 
 <link rel="stylesheet" href="./assets/css/base.css">
@@ -188,14 +188,14 @@
       <span class="marca">Portal Comercial</span>
       <nav class="abas" id="abas-desktop" aria-label="Seções"></nav>
       <span class="espaco"></span>
-      <button type="button" class="btn btn--fantasma btn-carrinho" id="btn-carrinho-header" aria-label="Abrir resumo da cotação" title="Ver cotação atual">
+      <button type="button" class="btn btn--fantasma btn-carrinho" id="btn-carrinho-header" title="Ver cotação atual">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
         </svg>
         <span>Cotação</span>
         <span id="badge-carrinho" class="badge-contagem" data-count="0">0</span>
       </button>
-      <span class="sinc" id="indicador-sinc" title="Estado da sincronização"></span>
+      <span class="sinc" id="indicador-sinc" title="Estado da sincronização" aria-live="polite"></span>
       <button class="btn btn--fantasma btn--pequeno" id="btn-atualizar" aria-label="Recarregar dados" title="Recarregar dados">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       </button>

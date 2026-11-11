@@ -15,7 +15,7 @@ function desenhar(alvo) {
         <h2>Disparador de WhatsApp</h2>
       </div>
       <div class="cartao__corpo grade" style="padding: 16px;">
-        <div style="flex: 1; min-width: 300px;">
+        <div style="flex: 1; min-width: min(100%, 300px);">
           <label class="rotulo" for="disp-mensagem">Mensagem</label>
           <textarea class="campo" id="disp-mensagem" rows="6" placeholder="Olá {nome}, temos uma novidade..."></textarea>
           <p class="pequeno suave" style="margin-top: 4px;">Use <strong>{nome}</strong> para inserir o nome do contato.</p>
@@ -39,7 +39,7 @@ function desenhar(alvo) {
           </button>
         </div>
         
-        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+        <div style="flex: 1; min-width: min(100%, 300px); display: flex; flex-direction: column;">
           <div class="linha">
             <h3 style="flex: 1; margin: 0;">Contatos</h3>
             <button class="btn btn--secundario btn--pequeno" id="disp-importar-wpp" style="margin-right: 8px;">📲 Puxar do WhatsApp</button>

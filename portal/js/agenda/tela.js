@@ -203,7 +203,7 @@ function telaPlanejar() {
     </p>
     <div class="rolagem">
       <table class="tabela">
-        <thead><tr><th>Cliente</th><th>Por quê</th><th>Local</th><th></th></tr></thead>
+        <thead><tr><th>Cliente</th><th>Por quê</th><th>Local</th><th><span class="apenas-leitor">Ação</span></th></tr></thead>
         <tbody>${fila.map(({ cliente, motivos }) => `<tr>
           <td>
             <div class="forte">${esc(cliente.nome)}</div>
