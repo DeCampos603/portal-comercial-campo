@@ -9,7 +9,10 @@
  *    frente do cliente, é o que este módulo evita.
  */
 
-import { estado, aoMudar, salvarCotacao, recursos } from '../nucleo/dados.js';
+import {
+  estado, aoMudar, salvarCotacao, recursos,
+  cotacoesParaNumeracao, statusSincronizacaoRegistro,
+} from '../nucleo/dados.js';
 import { imprimirHTML } from './impressao.js';
 import { criarIndice, buscar, comAtraso } from '../nucleo/busca.js';
 import { formatarBRL, formatarNumero, formatarPercentual, formatarData, hojeISO } from '../nucleo/moeda.js';
@@ -17,7 +20,7 @@ import { esc, avisar, vazio, confirmar, seloStatus, abrirPainel, comCarregando }
 import { abrirFormularioCliente, formatarCNPJ, digitosCNPJ } from '../carteira/formulario.js';
 import { calcularLinha, calcularTotais, rotuloEstoque, classificarEstoque, sanitizarParaCliente } from './calculo.js';
 import { gerarPedidoHTML, formatarNomeArquivoPDF } from './exportar.js';
-import { empresa, pedido } from './dadosPedido.js';
+import { empresa, pedido, numeroCotacaoExiste } from './dadosPedido.js';
 import { historicoDoItem, seloHistorico, itensParaRepor } from './historicoItem.js';
 import { validadeCotacao } from '../nucleo/diasUteis.js';
 import { perfil } from '../supabase.js';
@@ -44,6 +47,7 @@ let clienteId = null;
  *    o que começa ali é um documento novo, não a edição de um antigo.
  */
 let cotacaoId = null;
+let cotacaoNumero = null;
 let observacoes = '';
 let indice = null;
 let indiceClientes = null;
@@ -51,29 +55,6 @@ let resultadosBusca = [];
 let selecionado = 0;
 let soComEstoque = false;
 let modoVisualizacao = localStorage.getItem('cot_modo_visualizacao') || 'tabela';
-
-export function obterFilialAtiva() {
-  return localStorage.getItem('portal_filial_ativa') || 'matriz_rj';
-}
-
-export function definirFilialAtiva(filial) {
-  localStorage.setItem('portal_filial_ativa', filial);
-  const seletor = document.getElementById('seletor-filial');
-  if (seletor && seletor.value !== filial) seletor.value = filial;
-}
-
-export function obterSaldoFilial(item, filial = obterFilialAtiva()) {
-  if (!item) return 0;
-  if (item.saldos_filiais && item.saldos_filiais[filial] !== undefined) {
-    return item.saldos_filiais[filial];
-  }
-  const saldoBase = item.saldo != null ? Number(item.saldo) : null;
-  if (saldoBase === null) return null;
-  if (filial === 'matriz_rj') return saldoBase;
-  if (filial === 'baixada_rj') return Math.max(0, Math.floor(saldoBase * 0.4));
-  if (filial === 'vitoria_es') return Math.max(0, Math.floor(saldoBase * 0.25));
-  return saldoBase;
-}
 
 export function atualizarBadgeCarrinho() {
   let totalItens = 0;
@@ -97,7 +78,7 @@ function salvarRascunho() {
     localStorage.setItem(RASCUNHO, JSON.stringify({
       itens: [...itensDaCotacao],
       descontos: [...descontosDaCotacao],
-      clienteId, observacoes, cotacaoId,
+      clienteId, observacoes, cotacaoId, cotacaoNumero,
       em: new Date().toISOString(),
     }));
   } catch { /* modo privativo: seguir sem rascunho */ }
@@ -111,12 +92,15 @@ function lerRascunho() {
 }
 
 function limparCotacao() {
+  const tinhaSalva = Boolean(cotacaoId);
   itensDaCotacao = new Map();
   descontosDaCotacao = new Map();
   clienteId = null;
   observacoes = '';
   cotacaoId = null;          // o que vier depois é documento novo
+  cotacaoNumero = null;
   localStorage.removeItem(RASCUNHO);
+  if (tinhaSalva) pedido.avancarNumero(estado.cotacoes);
   atualizarBadgeCarrinho();
 }
 
@@ -154,6 +138,8 @@ export function carregarNaCotacao(cotacaoSalva) {
   // Documento NOVO, não edição do antigo: a cotação de origem continua no
   // histórico exatamente como foi enviada.
   cotacaoId = null;
+  cotacaoNumero = null;
+  pedido.avancarNumero(estado.cotacoes);
   salvarRascunho();
 
   atualizarBadgeCarrinho();
@@ -170,6 +156,7 @@ export function montarCotacoes(alvo) {
     if (clienteId === null && rascunho.clienteId) clienteId = rascunho.clienteId;
     if (!observacoes && rascunho.observacoes) observacoes = rascunho.observacoes;
     if (cotacaoId === null && rascunho.cotacaoId) cotacaoId = rascunho.cotacaoId;
+    if (cotacaoNumero === null && rascunho.cotacaoNumero) cotacaoNumero = rascunho.cotacaoNumero;
 
     if (rascunho.itens?.length && itensDaCotacao.size === 0) {
       itensDaCotacao = new Map(rascunho.itens);
@@ -179,8 +166,22 @@ export function montarCotacoes(alvo) {
     }
   }
 
+  if (cotacaoId && !cotacaoNumero) {
+    cotacaoNumero = estado.cotacoes.find((c) => c.id === cotacaoId)?.numero ?? null;
+  }
+
   alvo.innerHTML = esqueleto();
-  const soltar = aoMudar(() => redesenhar(alvo));
+  const soltar = aoMudar(() => {
+    if (cotacaoId && !cotacaoNumero) {
+      const encontrada = estado.cotacoes.find((c) => c.id === cotacaoId)?.numero ?? null;
+      if (encontrada) {
+        cotacaoNumero = encontrada;
+        salvarRascunho();
+      }
+    }
+    redesenhar(alvo);
+  });
+
   atualizarBadgeCarrinho();
   redesenhar(alvo);
   return soltar;
@@ -412,8 +413,9 @@ function blocoLinhas(linhas, totais) {
   }
 
   const corpo = linhas.map(({ item, calculo }) => {
-    const est = rotuloEstoque(item.status_estoque);
-    const excede = item.saldo != null && calculo.qtd > item.saldo;
+    const saldo = item.saldo;
+    const est = rotuloEstoque(classificarEstoque(saldo));
+    const excede = saldo != null && calculo.qtd > saldo;
     const hist = historicoDoItem(clienteId, item.codigo_sigma);
     return `<tr data-codigo="${esc(item.codigo_sigma)}">
       <td>
@@ -424,9 +426,9 @@ function blocoLinhas(linhas, totais) {
         <div>${esc(item.descricao)}</div>
         <div class="minusculo" style="margin-top:2px">
           <span class="selo selo--${est.classe} selo-estoque">${est.icone} ${esc(est.texto)}${
-            item.saldo != null ? ` · ${formatarNumero(item.saldo)} un.` : ''}</span>
+            saldo != null ? ` · ${formatarNumero(saldo)} un.` : ''}</span>
           ${item.st ? '<span class="selo selo--info" title="Sujeito a apuração — consultar SIBB">ST</span>' : ''}
-          ${excede ? `<span class="selo selo--risco">⚠️ pediu ${formatarNumero(calculo.qtd)}, há ${formatarNumero(item.saldo)}</span>` : ''}
+          ${excede ? `<span class="selo selo--risco">⚠️ pediu ${formatarNumero(calculo.qtd)}, há ${formatarNumero(saldo)}</span>` : ''}
           ${seloHistorico(hist)}
         </div>
         ${hist ? `<div class="minusculo suave" style="margin-top:3px">
@@ -480,6 +482,7 @@ function blocoLinhas(linhas, totais) {
   return `<div class="cartao">
     <div class="cartao__cabecalho" style="gap:8px;flex-wrap:wrap">
       <h2 style="flex:1">Itens da cotação</h2>
+      ${cotacaoNumero ? seloStatus(`Código ${cotacaoNumero}`, 'neutro') : ''}
       <span class="pequeno suave">${totais.quantidadeItens} item(ns)</span>
       <button class="btn btn--pequeno" id="cot-aplicar-desc-todos"
               title="Definir ou repetir a mesma porcentagem de desconto para todos os itens">
@@ -546,7 +549,8 @@ function blocoLinhas(linhas, totais) {
 function blocoDadosPedido() {
   const p = pedido.ler();
   const faltando = empresa.pendencias();
-  const numero = pedido.numeroAtual(estado.cotacoes);
+  const travaCodigo = Boolean(cotacaoId && cotacaoNumero);
+  const numero = pedido.numeroAtual(estado.cotacoes, cotacaoNumero, cotacaoId);
   const validade = validadeCotacao(p.validadeDiasUteis ?? 7);
 
   return `<div class="cartao" style="margin-top:12px">
@@ -564,15 +568,21 @@ function blocoDadosPedido() {
         <div>
           <label class="rotulo" for="ped-numero">Pedido nº</label>
           <input class="campo" id="ped-numero" value="${esc(numero)}"
-                 ${p.numeroAutomatico ? 'readonly' : ''}
+                 ${p.numeroAutomatico || travaCodigo ? 'readonly' : ''}
                  placeholder="Ex.: 2026-0001">
           <label class="linha minusculo suave" style="gap:5px;margin-top:5px;cursor:pointer">
-            <input type="checkbox" id="ped-auto" ${p.numeroAutomatico ? 'checked' : ''}>
+            <input type="checkbox" id="ped-auto"
+                   ${p.numeroAutomatico ? 'checked' : ''}
+                   ${travaCodigo ? 'disabled' : ''}>
             Numerar automaticamente
           </label>
-          ${p.numeroAutomatico ? `<p class="minusculo suave" style="margin:2px 0 0">
-            Calculado do histórico: ${estado.cotacoes.length} cotação(ões) registrada(s).
-          </p>` : ''}
+          ${travaCodigo
+            ? `<p class="minusculo suave" style="margin:2px 0 0">
+                Código único fixado para esta cotação (${estado.cotacoes.length} no histórico). Para gerar novo código, inicie outra cotação.
+              </p>`
+            : (p.numeroAutomatico ? `<p class="minusculo suave" style="margin:2px 0 0">
+                Calculado do histórico: ${estado.cotacoes.length} cotação(ões) registrada(s).
+              </p>` : '')}
         </div>
         <div>
           <label class="rotulo" for="ped-pagamento">Condições de pagamento</label>
@@ -665,10 +675,13 @@ function abrirDadosEmpresa() {
 function guardarCampoPedido() {
   const valor = (id) => document.getElementById(id)?.value.trim() ?? '';
   const atual = pedido.ler();
+  const travaCodigo = Boolean(cotacaoId && cotacaoNumero);
   pedido.gravar({
     ...atual,
-    numero: valor('ped-numero') || atual.numero,
-    numeroAutomatico: document.getElementById('ped-auto')?.checked ?? true,
+    numero: travaCodigo ? atual.numero : (valor('ped-numero') || atual.numero),
+    numeroAutomatico: travaCodigo
+      ? atual.numeroAutomatico
+      : (document.getElementById('ped-auto')?.checked ?? true),
     condicoesPagamento: valor('ped-pagamento'),
     prazoEntrega: valor('ped-prazo'),
     // frete e validade não vêm de <input>: um é botão, o outro é calculado.
@@ -687,9 +700,8 @@ function desenharResultados(folheando = false) {
     return;
   }
 
-  const filialAtual = obterFilialAtiva();
   const total = soComEstoque
-    ? estado.catalogo.filter((i) => (obterSaldoFilial(i, filialAtual) ?? 0) > 0).length
+    ? estado.catalogo.filter((i) => (i.saldo ?? 0) > 0).length
     : estado.catalogo.length;
 
   const cabecalhoInfo = folheando ? `<p class="minusculo suave" style="margin:8px 0 6px">
@@ -701,12 +713,12 @@ function desenharResultados(folheando = false) {
       ${cabecalhoInfo}
       <div class="grid-produtos catalogo-container-altura">
         ${resultadosBusca.map((item) => {
-          const saldo = obterSaldoFilial(item, filialAtual);
+          const saldo = item.saldo;
           const est = rotuloEstoque(classificarEstoque(saldo));
           const esgotado = saldo !== null && saldo <= 0;
           const jaTem = itensDaCotacao.has(item.codigo_sigma);
           return `
-            <div class="card-produto" data-item="${esc(item.codigo_sigma)}" style="${esgotado ? 'opacity:0.85;' : ''}">
+            <div class="card-produto" data-item="${esc(item.codigo_sigma)}">
               <div class="card-produto__topo">
                 <span class="card-produto__sku">${esc(item.codigo_sigma)}</span>
                 <span class="badge-estoque badge-estoque--${est.classe}">
@@ -724,10 +736,10 @@ function desenharResultados(folheando = false) {
                   <span class="card-produto__preco-rotulo">Unitário</span>
                   <span class="card-produto__preco-valor">${formatarBRL(item.valor_unitario_centavos)}</span>
                 </div>
-                <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--fantasma' : 'btn--primario'}"
+                <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--risco' : 'btn--primario'}"
                         data-add="${esc(item.codigo_sigma)}"
-                        ${esgotado ? 'disabled aria-disabled="true" title="Esgotado nesta filial"' : ''}>
-                  ${esgotado ? 'Esgotado' : (jaTem ? '+ Mais um' : '+ Cotar')}
+                        title="${esgotado ? 'Item sem estoque — clique para incluir na cotação mesmo assim' : ''}">
+                  ${jaTem ? '+ Mais um' : '+ Cotar'}
                 </button>
               </div>
             </div>`;
@@ -747,11 +759,11 @@ function desenharResultados(folheando = false) {
           </tr>
         </thead>
         <tbody>${resultadosBusca.map((item, i) => {
-          const saldo = obterSaldoFilial(item, filialAtual);
+          const saldo = item.saldo;
           const est = rotuloEstoque(classificarEstoque(saldo));
           const esgotado = saldo !== null && saldo <= 0;
           const jaTem = itensDaCotacao.has(item.codigo_sigma);
-          return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:${esgotado ? 'not-allowed' : 'pointer'};${
+          return `<tr data-add="${esc(item.codigo_sigma)}" style="cursor:pointer;${
             i === selecionado ? 'background:var(--bg-hover)' : ''}">
             <td style="width:170px;min-width:140px">
               <div class="forte">${esc(item.codigo_sigma)}</div>
@@ -769,11 +781,11 @@ function desenharResultados(folheando = false) {
             </td>
             <td class="col-valor forte" style="width:140px;min-width:120px;text-align:right">${formatarBRL(item.valor_unitario_centavos)}</td>
             <td style="width:110px;min-width:90px;text-align:center">
-              <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--fantasma' : 'btn--primario'}"
+              <button type="button" class="btn btn--pequeno ${esgotado ? 'btn--risco' : 'btn--primario'}"
                       data-add="${esc(item.codigo_sigma)}"
-                      ${esgotado ? 'disabled aria-disabled="true"' : ''}
+                      title="${esgotado ? 'Item sem estoque — clique para incluir na cotação mesmo assim' : ''}"
                       style="min-height:34px;padding:0 12px;width:100%">
-                ${esgotado ? 'Esgotado' : '+ Cotar'}
+                + Cotar
               </button>
             </td>
           </tr>`;
@@ -798,9 +810,8 @@ const LISTA_SEM_TERMO = 80;
 
 function rodarBusca(termo) {
   let base = indice;
-  const filialAtual = obterFilialAtiva();
   if (soComEstoque) {
-    base = indice.filter((i) => (obterSaldoFilial(i.registro, filialAtual) ?? 0) > 0);
+    base = indice.filter((i) => (i.registro.saldo ?? 0) > 0);
   }
   resultadosBusca = buscar(base, termo, termo.trim() ? 40 : LISTA_SEM_TERMO);
   selecionado = 0;
@@ -811,14 +822,12 @@ function adicionar(codigo) {
   const item = estado.catalogo.find((i) => i.codigo_sigma === codigo);
   if (!item) return;
 
-  const saldo = obterSaldoFilial(item);
-  if (saldo !== null && saldo <= 0) {
-    avisar(`${codigo} está esgotado no estoque desta filial (${saldo ?? 0} un.) e não pode ser cotado.`, 'risco', 4000);
-    return;
-  }
-
-  if (classificarEstoque(saldo) === 'baixo') {
-    avisar(`${codigo} tem estoque baixo nesta filial (${saldo} un.).`, 'atencao', 3000);
+  const saldo = item.saldo;
+  const status = classificarEstoque(saldo);
+  if (status === 'sem_estoque') {
+    avisar(`${codigo} está sem estoque (${saldo ?? 0} un.) — incluído na cotação.`, 'risco', 3500);
+  } else if (status === 'baixo') {
+    avisar(`${codigo} tem estoque baixo (${saldo} un.).`, 'atencao', 3000);
   }
 
   if (!itensDaCotacao.has(codigo)) itensDaCotacao.set(codigo, 1);
@@ -880,11 +889,6 @@ function ligarEventos(alvo) {
     redesenhar(alvo);
   });
 
-  window.addEventListener('portal:filial-mudou', () => {
-    rodarBusca(alvo.querySelector('#cot-busca')?.value || '');
-    redesenhar(alvo);
-  });
-
   alvo.querySelector('#cot-resultados')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-add]');
     if (btn) {
@@ -894,9 +898,6 @@ function ligarEventos(alvo) {
     }
     const linha = e.target.closest('tr[data-add]');
     if (linha) {
-      const item = estado.catalogo.find((i) => i.codigo_sigma === linha.dataset.add);
-      const saldo = obterSaldoFilial(item);
-      if (saldo !== null && saldo <= 0) return;
       adicionar(linha.dataset.add);
     }
   });
@@ -1164,7 +1165,10 @@ function montarDocumento() {
   const linhas = montarLinhas();
   const totais = calcularTotais(linhas);
   const cliente = estado.clientes.find((c) => c.id === clienteId) ?? null;
-  const dadosPedido = { ...pedido.ler(), numero: pedido.numeroAtual(estado.cotacoes) };
+  const dadosPedido = {
+    ...pedido.ler(),
+    numero: pedido.numeroAtual(estado.cotacoes, cotacaoNumero, cotacaoId),
+  };
   const validade = validadeCotacao(dadosPedido.validadeDiasUteis ?? 7);
 
   return {
@@ -1194,13 +1198,68 @@ function montarDocumento() {
  * corrigido, a I.E. da representação é preenchida depois. Um PDF regerado a
  * partir de referências sairia diferente do que o cliente tem na mão.
  */
+/**
+ * Garante um código de cotação único (local + fila + Supabase) e evita gerar
+ * novos números ou duplicatas ao salvar/imprimir o mesmo documento novamente.
+ */
+async function prepararNumeroUnicoParaGravar(documento) {
+  const p = pedido.ler();
+  const todasCotacoes = await cotacoesParaNumeracao();
+  const travaCodigo = Boolean(cotacaoId && cotacaoNumero);
+
+  let codigoFinal;
+  if (travaCodigo) {
+    codigoFinal = numeroCotacaoExiste(cotacaoNumero, todasCotacoes, cotacaoId)
+      ? pedido.gerarNumero(todasCotacoes, cotacaoId)
+      : cotacaoNumero;
+    if (codigoFinal !== cotacaoNumero) {
+      avisar(
+        `O código ${cotacaoNumero} já existia em outra cotação; código ajustado para ${codigoFinal}.`,
+        'atencao',
+        4500,
+      );
+    }
+  } else if (p.numeroAutomatico) {
+    codigoFinal = pedido.gerarNumero(todasCotacoes, cotacaoId);
+  } else {
+    const manual = String(
+      document.getElementById('ped-numero')?.value
+      ?? documento.cotacao.pedido.numero
+      ?? p.numero
+      ?? '',
+    ).trim();
+    if (!manual) {
+      avisar('Informe um código para a cotação ou ative a numeração automática.', 'atencao');
+      return null;
+    }
+    if (numeroCotacaoExiste(manual, todasCotacoes, cotacaoId)) {
+      avisar(
+        `O código "${manual}" já existe em outra cotação. Use um código único ou ative a numeração automática.`,
+        'atencao',
+        4500,
+      );
+      return null;
+    }
+    codigoFinal = manual;
+  }
+
+  documento.cotacao.pedido.numero = codigoFinal;
+  const campoNumero = document.getElementById('ped-numero');
+  if (campoNumero) campoNumero.value = codigoFinal;
+  return codigoFinal;
+}
+
 function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
   const p = cotacao.pedido;
 
   // O id nasce no primeiro salvamento e não muda mais. É o que faz "salvar" e
   // depois "gerar PDF" atualizarem o MESMO registro em vez de criar dois.
+  const sufixoUnico = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID().slice(0, 6)
+    : Math.random().toString(36).slice(2, 8);
   cotacaoId ??= `cot_${hojeISO().replace(/-/g, '')}_${cliente.codigo}`
-              + `_${Date.now().toString(36)}`;
+              + `_${Date.now().toString(36)}_${sufixoUnico}`;
+  if (p.numero) cotacaoNumero = p.numero;
   salvarRascunho();
 
   const perf = perfil();
@@ -1274,8 +1333,9 @@ function montarRegistro({ linhas, totais, cliente, cotacao }, situacao) {
   };
 }
 
-/** Salvar sem imprimir: arquiva a cotação e segue a vida. */
+/** Salvar sem imprimir: arquiva a cotação e preserva o mesmo código ao re-salvar. */
 async function salvar() {
+  guardarCampoPedido();
   const documento = montarDocumento();
   if (!documento.linhas.length) {
     avisar('A cotação está vazia.', 'atencao');
@@ -1289,16 +1349,39 @@ async function salvar() {
     console.warn('Tabela cotacoes remota indisponível — salvando localmente na fila.');
   }
 
-  guardarCampoPedido();
+  const codigo = await prepararNumeroUnicoParaGravar(documento);
+  if (!codigo) return;
 
   // 'rascunho', não 'enviada': salvar é guardar o trabalho, não mandar ao
   // cliente. Quem manda é o PDF, e é ele que promove a situação.
   const registro = montarRegistro(documento, 'rascunho');
-  await salvarCotacao(registro);
-  avisar(`Cotação ${registro.numero || ''} salva como rascunho.`, 'ok');
+  const salvo = await salvarCotacao(registro);
+  if (salvo?.numero && salvo.numero !== cotacaoNumero) {
+    cotacaoNumero = salvo.numero;
+    salvarRascunho();
+  }
+
+  const codigoExibir = salvo?.numero || registro.numero || '';
+  const statusSync = await statusSincronizacaoRegistro('cotacoes', registro.id);
+  if (statusSync.pendente && statusSync.erro) {
+    avisar(
+      `Cotação ${codigoExibir} salva no aparelho (envio ao servidor pendente: ${statusSync.erro}).`,
+      'atencao',
+      5000,
+    );
+  } else if (statusSync.pendente) {
+    avisar(
+      `Cotação ${codigoExibir} salva no aparelho e aguardando envio ao servidor.`,
+      'ok',
+      4000,
+    );
+  } else {
+    avisar(`Cotação ${codigoExibir} salva como rascunho.`, 'ok');
+  }
 }
 
 async function imprimir(alvo) {
+  guardarCampoPedido();
   const documento = montarDocumento();
   if (!documento.linhas.length) { avisar('A cotação está vazia.', 'atencao'); return; }
 
@@ -1308,21 +1391,27 @@ async function imprimir(alvo) {
     return;
   }
 
-  guardarCampoPedido();
+  const codigo = await prepararNumeroUnicoParaGravar(documento);
+  if (!codigo) return;
 
   // 🔒 Sanitiza ANTES de gerar o HTML: o dado interno nunca entra na página.
   const sanitizada = sanitizarParaCliente(cotacao);
   const nomeArquivo = formatarNomeArquivoPDF(sanitizada);
   await imprimirHTML(gerarPedidoHTML(sanitizada), nomeArquivo);
 
-  // Só avança a numeração depois de o pedido ter sido efetivamente gerado.
-  pedido.avancarNumero();
-  const campoNumero = document.getElementById('ped-numero');
-  if (campoNumero) campoNumero.value = pedido.ler().numero;
-
-  // Arquiva DEPOIS de imprimir: gerar o PDF é o que o representante veio
-  // fazer, e uma falha ao arquivar não pode impedir isso.
-  if (cliente) await salvarCotacao(montarRegistro(documento, 'enviada'));
+  // Arquiva mantendo o mesmo id e o mesmo código fixado nesta cotação.
+  if (cliente) {
+    const registro = montarRegistro(documento, 'enviada');
+    const salvo = await salvarCotacao(registro);
+    if (salvo?.numero && salvo.numero !== cotacaoNumero) {
+      cotacaoNumero = salvo.numero;
+      salvarRascunho();
+    }
+  } else if (!cotacaoNumero) {
+    pedido.avancarNumero(estado.cotacoes, cotacaoId);
+    const campoNumero = document.getElementById('ped-numero');
+    if (campoNumero) campoNumero.value = pedido.ler().numero;
+  }
 }
 
 // Atalho global: "/" foca a busca de qualquer lugar da tela de cotações.
@@ -1351,7 +1440,7 @@ export function abrirDrawerCotacao() {
     </div>
     <div class="grade" style="gap:10px">
       ${linhas.map(({ item, calculo }) => {
-        const saldo = obterSaldoFilial(item);
+        const saldo = item.saldo;
         const est = rotuloEstoque(classificarEstoque(saldo));
         return `
           <div style="padding:10px 12px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius-md);display:flex;flex-direction:column;gap:6px">

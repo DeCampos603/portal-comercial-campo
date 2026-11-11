@@ -15,7 +15,7 @@
 export const SUPABASE_URL = 'https://jzqsyityeoqnvuznboto.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_l8du_r66HkU-w8fNZThQnw_z8Frm4uw';
 
-/** Limiares do semáforo de estoque por filial (Regras Oficiais Sigma RJ)
+/** Limiares do semáforo de estoque (Regras Oficiais Sigma RJ)
  *  - Esgotado: saldo <= 0
  *  - Baixo Estoque: 1 a 10 un
  *  - Disponível: > 10 un

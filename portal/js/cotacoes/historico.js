@@ -66,7 +66,7 @@ export function situacaoEfetiva(c) {
 // ---------------------------------------------------------------- api
 
 export function montarHistorico(alvo) {
-  const soltar = aoMudar(() => desenhar(alvo));
+  const soltar = aoMudar(() => { indice = null; desenhar(alvo); });
   desenhar(alvo);
   return soltar;
 }
@@ -110,7 +110,7 @@ function cotacoesFiltradas() {
 
   return [...lista].sort((a, b) =>
     String(b.data).localeCompare(String(a.data))
-    || String(b.criado_em ?? '').localeCompare(String(a.criado_em ?? '')));
+    || String(b.criado_em ?? b.atualizado_em ?? '').localeCompare(String(a.criado_em ?? a.atualizado_em ?? '')));
 }
 
 // -------------------------------------------------------------- pintura

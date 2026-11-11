@@ -23,7 +23,12 @@ function abrir() {
       if (!db.objectStoreNames.contains(CACHE)) db.createObjectStore(CACHE, { keyPath: 'chave' });
       if (!db.objectStoreNames.contains(FILA)) db.createObjectStore(FILA, { keyPath: 'id' });
     };
-    req.onsuccess = () => { conexao = req.result; resolve(conexao); };
+    req.onsuccess = () => {
+      conexao = req.result;
+      conexao.onclose = () => { conexao = null; };
+      conexao.onversionchange = () => { conexao?.close(); conexao = null; };
+      resolve(conexao);
+    };
     req.onerror = () => reject(req.error);
   });
 }

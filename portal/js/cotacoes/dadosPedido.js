@@ -60,6 +60,26 @@ export const empresa = {
   },
 };
 
+export function normalizarNumeroPedido(valor) {
+  return String(valor ?? '').trim().toUpperCase();
+}
+
+export function numerosDeCotacaoEmUso(cotacoes = [], ignorarId = null) {
+  const usados = new Set();
+  for (const c of cotacoes) {
+    if (!c || (ignorarId && c.id === ignorarId)) continue;
+    const norm = normalizarNumeroPedido(c.numero);
+    if (norm) usados.add(norm);
+  }
+  return usados;
+}
+
+export function numeroCotacaoExiste(numero, cotacoes = [], ignorarId = null) {
+  const norm = normalizarNumeroPedido(numero);
+  if (!norm) return false;
+  return numerosDeCotacaoEmUso(cotacoes, ignorarId).has(norm);
+}
+
 export const pedido = {
   ler: () => ler(CHAVE_PEDIDO, PEDIDO_PADRAO),
   gravar: (v) => gravar(CHAVE_PEDIDO, v),
@@ -68,8 +88,8 @@ export const pedido = {
    * Sugere o próximo número, preservando prefixo e largura:
    * "MJ-0042" → "MJ-0043".
    */
-  proximoNumero() {
-    const atual = this.ler().numero || '';
+  proximoNumero(base = null) {
+    const atual = String(base ?? (this.ler().numero || '')).trim();
     const casa = atual.match(/^(.*?)(\d+)(\D*)$/);
     if (!casa) return atual;
     const [, prefixo, digitos, sufixo] = casa;
@@ -78,48 +98,69 @@ export const pedido = {
   },
 
   /**
-   * Número automático de verdade: não exige que alguém digite o primeiro.
-   *
-   * Deriva do HISTÓRICO — conta as cotações do ano e soma um. Assim a
-   * sequência sobrevive a trocar de computador, limpar o navegador ou
-   * outro representante emitir pedidos: o banco é a fonte, não o
-   * localStorage.
-   *
-   * Formato AAAA-NNNN: legível, ordenável e reinicia a cada ano.
-   *
-   * @param {Array} cotacoes  estado.cotacoes
+   * Avança um código base até encontrar um número que não esteja em uso no histórico.
    */
-  gerarNumero(cotacoes = []) {
+  proximoNumeroLivre(cotacoes = [], base = null, ignorarId = null) {
+    const usados = numerosDeCotacaoEmUso(cotacoes, ignorarId);
+    let atual = String(base ?? (this.ler().numero || '')).trim();
+    if (!atual) return this.gerarNumero(cotacoes, ignorarId);
+    if (!usados.has(normalizarNumeroPedido(atual))) return atual;
+
+    for (let i = 0; i < 1000; i += 1) {
+      const proximo = this.proximoNumero(atual);
+      if (!proximo || proximo === atual) break;
+      atual = proximo;
+      if (!usados.has(normalizarNumeroPedido(atual))) return atual;
+    }
+    return this.gerarNumero(cotacoes, ignorarId);
+  },
+
+  /**
+   * Número automático único derivado do histórico.
+   *
+   * Formato AAAA-NNNN: legível, ordenável, reinicia a cada ano e pula
+   * qualquer código já existente para impedir duplicatas.
+   *
+   * @param {Array} cotacoes       estado.cotacoes (+ números remotos)
+   * @param {string|null} ignorarId  id da cotação em edição, se houver
+   */
+  gerarNumero(cotacoes = [], ignorarId = null) {
     const ano = new Date().getFullYear();
     const prefixo = `${ano}-`;
+    const usados = numerosDeCotacaoEmUso(cotacoes, ignorarId);
 
     let maior = 0;
     for (const c of cotacoes) {
-      const casa = String(c.numero || '').match(/^(\d{4})-(\d+)$/);
+      const casa = String(c?.numero || '').trim().match(/^(\d{4})-(\d+)$/);
       if (casa && casa[1] === String(ano)) {
         maior = Math.max(maior, Number(casa[2]));
       }
     }
-    return `${prefixo}${String(maior + 1).padStart(4, '0')}`;
+    let seq = maior + 1;
+    let candidato = `${prefixo}${String(seq).padStart(4, '0')}`;
+    while (usados.has(normalizarNumeroPedido(candidato))) {
+      seq += 1;
+      candidato = `${prefixo}${String(seq).padStart(4, '0')}`;
+    }
+    return candidato;
   },
 
   /**
-   * Devolve o número a usar agora. Se a numeração é automática, sempre
-   * recalcula a partir do histórico — evita repetir número quando duas
-   * cotações são feitas no mesmo dia em máquinas diferentes.
+   * Devolve o número a exibir/usar. Quando a cotação já foi salva
+   * (`numeroTravado`), mantém esse mesmo código em vez de gerar outro.
    */
-  numeroAtual(cotacoes = []) {
+  numeroAtual(cotacoes = [], numeroTravado = null, ignorarId = null) {
     const atual = this.ler();
-    if (!atual.numeroAutomatico) return atual.numero || '';
-    const numero = this.gerarNumero(cotacoes);
-    if (numero !== atual.numero) this.gravar({ ...atual, numero });
-    return numero;
+    if (!atual.numeroAutomatico) return String(numeroTravado || atual.numero || '').trim();
+    if (numeroTravado) return String(numeroTravado).trim();
+    return this.gerarNumero(cotacoes, ignorarId);
   },
 
-  /** Chamado ao gerar o PDF: avança a numeração manual. */
-  avancarNumero() {
+  /** Ao iniciar uma nova cotação em modo manual, avança para o próximo código livre. */
+  avancarNumero(cotacoes = [], ignorarId = null) {
     const atual = this.ler();
-    if (!atual.numeroAutomatico || !atual.numero) return;
-    this.gravar({ ...atual, numero: this.proximoNumero() });
+    if (atual.numeroAutomatico || !atual.numero) return;
+    const proximo = this.proximoNumeroLivre(cotacoes, this.proximoNumero(atual.numero), ignorarId);
+    this.gravar({ ...atual, numero: proximo });
   },
 };

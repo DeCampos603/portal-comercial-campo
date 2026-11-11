@@ -16,7 +16,7 @@
 
 import { SALDO_SEM_ESTOQUE, SALDO_BAIXO } from '../config.js';
 
-/** Reproduz o semáforo de estoque por filial (Regra Sigma RJ). */
+/** Reproduz o semáforo de estoque (Regra Sigma RJ). */
 export function classificarEstoque(saldo) {
   if (saldo === null || saldo === undefined) return null;
   if (saldo <= SALDO_SEM_ESTOQUE) return 'sem_estoque';
@@ -101,9 +101,11 @@ export function calcularTotais(linhas) {
       totalIpi += calculo.valorIpi;
       totalComIpi += calculo.valorComIpi;
     }
-    if (item.status_estoque === 'sem_estoque') itensSemEstoque += 1;
-    if (item.status_estoque === 'baixo') itensEstoqueBaixo += 1;
-    if (item.saldo !== null && item.saldo !== undefined && calculo.qtd > item.saldo) {
+    const saldo = item.saldo;
+    const status = classificarEstoque(saldo);
+    if (status === 'sem_estoque') itensSemEstoque += 1;
+    if (status === 'baixo') itensEstoqueBaixo += 1;
+    if (saldo !== null && saldo !== undefined && calculo.qtd > saldo) {
       itensAcimaDoSaldo += 1;
     }
   }

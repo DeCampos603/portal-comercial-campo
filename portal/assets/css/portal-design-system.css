@@ -36,10 +36,10 @@
   --primary-950:  #08243f;
 
   /* -------------------------------------------------------------------------
-     2. SEMÁFORO DE ESTOQUE POR FILIAL (REQUISITO CANÔNICO DE DOMÍNIO)
+     2. SEMÁFORO DE ESTOQUE (REQUISITO CANÔNICO DE DOMÍNIO)
      - Disponível (> 10 un): Verde (#4ade80)
      - Estoque Baixo (1 a 10 un): Amarelo (#facc15)
-     - Esgotado (0 un): Vermelho (#f87171) com desabilitação de compra
+     - Esgotado (<= 0 un): Vermelho (#f87171) — inclusão permitida com alerta
      ------------------------------------------------------------------------- */
   --estoque-disponivel:       #4ade80;
   --estoque-disponivel-fundo: rgba(74, 222, 128, 0.16);
@@ -332,7 +332,7 @@ html, body {
 }
 
 /* ==========================================================================
-   SEMÁFORO DE ESTOQUE POR FILIAL (BADGES VISUAIS)
+   SEMÁFORO DE ESTOQUE (BADGES VISUAIS)
    ========================================================================== */
 .badge-estoque {
   display: inline-flex;
@@ -391,7 +391,7 @@ html, body {
 }
 
 /* ==========================================================================
-   HEADER MODERNO COM FILIAL, BUSCA & CARRINHO COM BADGE
+   HEADER MODERNO COM BUSCA & CARRINHO COM BADGE
    ========================================================================== */
 .cabecalho-principal {
   position: sticky;
@@ -414,39 +414,6 @@ html, body {
   align-items: center;
   gap: var(--space-2);
   text-decoration: none;
-}
-
-.seletor-filial-wrapper {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-}
-
-.seletor-filial {
-  appearance: none;
-  min-height: 40px;
-  padding: 0 32px 0 12px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-}
-.seletor-filial:focus {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: var(--focus-ring);
-}
-
-.seletor-filial-icone {
-  position: absolute;
-  right: 10px;
-  pointer-events: none;
-  color: var(--text-muted);
 }
 
 /* Botão de Carrinho de Cotação com Badge */
@@ -765,7 +732,6 @@ html, body {
 @media (max-width: 768px), (pointer: coarse) {
   .btn,
   .campo,
-  .seletor-filial,
   .cartao-acao,
   label.linha {
     min-height: 48px !important;
